@@ -33,50 +33,45 @@ class RPApi {
 
   async getCurrentUser() {
     const token = this.getStoredToken();
-    if (!token) {
-      return null;
-    }
+    if (!token) return null;
 
     try {
-      const response = await this.client.get(
-        `${this.getBaseURL()}/api/v1/auth/me`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await this.client.get(`${this.getBaseURL()}/api/v1/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       if (error.response?.status === 401) {
         this.clearStoredToken();
         return null;
       }
-      throw new Error(
-        error.response?.data?.detail || 'Failed to get user info'
-      );
+      throw new Error(error.response?.data?.detail || 'Failed to get user info');
     }
   }
 
+  async localLogin(email: string, password: string) {
+    const response = await this.client.post(`${this.getBaseURL()}/api/v1/auth/local-login`, {
+      email,
+      password,
+    });
+    const token = response.data?.token;
+    if (!token) throw new Error('Login token is missing');
+    this.setStoredToken(token);
+    return response.data;
+  }
+
   async login() {
-    try {
-      window.location.assign(`${this.getBaseURL()}/api/v1/auth/login`);
-    } catch (error) {
-      throw new Error(
-        error.response?.data?.detail || 'Failed to initiate login'
-      );
-    }
+    window.location.assign('/login');
   }
 
   async logout() {
     try {
-      const response = await this.client.get(
-        `${this.getBaseURL()}/api/v1/auth/logout`
-      );
+      const response = await this.client.get(`${this.getBaseURL()}/api/v1/auth/logout`);
       this.clearStoredToken();
-      window.location.assign(response.data.redirect_url);
-    } catch (error) {
-      throw new Error(error.response?.data?.detail || 'Failed to logout');
+      window.location.assign(response.data.redirect_url || '/');
+    } catch (error: any) {
+      this.clearStoredToken();
+      window.location.assign('/');
     }
   }
 }

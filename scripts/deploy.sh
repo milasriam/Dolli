@@ -42,11 +42,29 @@ rsync -a --delete dist/ ${FRONT_DIR}/
 systemctl restart ${BACKEND_SERVICE}
 systemctl is-active ${BACKEND_SERVICE}
 
+echo "=== wait for API readiness ==="
+ok=0
+for i in \$(seq 1 30); do
+  code=\$(curl -s -o /tmp/dolli_health.json -w "%{http_code}" ${API_URL}/health || true)
+  if [ "\$code" = "200" ]; then
+    ok=1
+    break
+  fi
+  sleep 1
+done
+
+if [ "\$ok" -ne 1 ]; then
+  echo "API did not become healthy in time"
+  systemctl status ${BACKEND_SERVICE} --no-pager -l | sed -n '1,60p'
+  journalctl -u ${BACKEND_SERVICE} -n 80 --no-pager
+  exit 1
+fi
+
 echo "=== API ==="
-curl -sS -i ${API_URL}/health | sed -n '1,10p'
+curl -sS -i ${API_URL}/health | sed -n '1,12p'
 
 echo "=== SITE ==="
-curl -sS -I ${SITE_URL} | sed -n '1,10p'
+curl -sS -I ${SITE_URL} | sed -n '1,12p'
 REMOTE
 
 echo "✅ Deploy ${TARGET} done"

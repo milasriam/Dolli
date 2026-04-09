@@ -18,6 +18,7 @@ from core.config import settings
 from core.database import get_db
 from dependencies.auth import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 from fastapi.responses import RedirectResponse
 from models.auth import User
 from schemas.auth import (
@@ -391,3 +392,46 @@ async def logout():
     """Logout user."""
     logout_url = build_logout_url()
     return {"redirect_url": logout_url}
+
+
+class LocalLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@router.post("/local-login", response_model=TokenExchangeResponse)
+async def local_login(
+    payload: LocalLoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    allow_password_auth = os.environ.get("ALLOW_PASSWORD_AUTH", "").lower() in ("1", "true", "yes")
+    if not allow_password_auth:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Password auth is disabled",
+        )
+
+    expected_email = os.environ.get("LOCAL_LOGIN_EMAIL", "").strip().lower()
+    expected_password = os.environ.get("LOCAL_LOGIN_PASSWORD", "")
+
+    if not expected_email or not expected_password:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Password auth is not configured on server",
+        )
+
+    if payload.email.strip().lower() != expected_email or payload.password != expected_password:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    auth_service = AuthService(db)
+    user = await auth_service.get_or_create_user(
+        platform_sub=os.environ.get("LOCAL_LOGIN_USER_ID", "owner-user"),
+        email=expected_email,
+        name=os.environ.get("LOCAL_LOGIN_USER_NAME", "Owner"),
+    )
+    user.role = os.environ.get("LOCAL_LOGIN_USER_ROLE", "admin")
+    await db.commit()
+
+    app_token, _, _ = await auth_service.issue_app_token(user=user)
+    return TokenExchangeResponse(token=app_token)
+
