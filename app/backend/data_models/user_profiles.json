@@ -1,0 +1,64 @@
+{
+    "title": "user_profiles",
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "integer",
+            "description": "Primary key, auto-increment"
+        },
+        "user_id": {
+            "type": "string",
+            "description": "User ID"
+        },
+        "display_name": {
+            "type": "string",
+            "description": "Display name"
+        },
+        "avatar_url": {
+            "type": "string",
+            "description": "Avatar URL"
+        },
+        "total_donated": {
+            "type": "number",
+            "description": "Total amount donated"
+        },
+        "donation_count": {
+            "type": "integer",
+            "description": "Total donations made"
+        },
+        "current_streak": {
+            "type": "integer",
+            "description": "Current donation streak days"
+        },
+        "longest_streak": {
+            "type": "integer",
+            "description": "Longest streak ever"
+        },
+        "referral_count": {
+            "type": "integer",
+            "description": "Total successful referrals"
+        },
+        "badges": {
+            "type": "string",
+            "description": "JSON array of badge IDs"
+        },
+        "impact_rank": {
+            "type": "string",
+            "description": "Impact multiplier rank"
+        },
+        "last_donation_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last donation timestamp"
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Profile creation timestamp"
+        }
+    },
+    "required": [
+        "id",
+        "user_id"
+    ]
+}

@@ -1,0 +1,34 @@
+{
+    "title": "badges",
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "integer",
+            "description": "Primary key, auto-increment"
+        },
+        "name": {
+            "type": "string",
+            "description": "Badge name"
+        },
+        "description": {
+            "type": "string",
+            "description": "Badge description"
+        },
+        "icon": {
+            "type": "string",
+            "description": "Badge emoji icon"
+        },
+        "category": {
+            "type": "string",
+            "description": "Badge category: giving, streak, social, special"
+        },
+        "tier": {
+            "type": "string",
+            "description": "Badge tier: bronze, silver, gold, platinum"
+        }
+    },
+    "required": [
+        "id",
+        "name"
+    ]
+}

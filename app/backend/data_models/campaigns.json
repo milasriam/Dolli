@@ -1,0 +1,86 @@
+{
+    "title": "campaigns",
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "integer",
+            "description": "Primary key, auto-increment"
+        },
+        "user_id": {
+            "type": "string",
+            "description": "Creator user ID"
+        },
+        "title": {
+            "type": "string",
+            "description": "Campaign title"
+        },
+        "description": {
+            "type": "string",
+            "description": "Campaign description"
+        },
+        "category": {
+            "type": "string",
+            "description": "Category: environment, health, education, food, animals"
+        },
+        "goal_amount": {
+            "type": "number",
+            "description": "Funding goal amount"
+        },
+        "raised_amount": {
+            "type": "number",
+            "description": "Amount raised so far",
+            "default": 0
+        },
+        "donor_count": {
+            "type": "integer",
+            "description": "Number of donors",
+            "default": 0
+        },
+        "share_count": {
+            "type": "integer",
+            "description": "Number of shares",
+            "default": 0
+        },
+        "click_count": {
+            "type": "integer",
+            "description": "Number of clicks",
+            "default": 0
+        },
+        "image_url": {
+            "type": "string",
+            "description": "Campaign cover image URL"
+        },
+        "status": {
+            "type": "string",
+            "description": "Campaign status: active, draft, completed",
+            "default": "active"
+        },
+        "urgency_level": {
+            "type": "string",
+            "description": "Urgency level: low, medium, high",
+            "default": "medium"
+        },
+        "featured": {
+            "type": "boolean",
+            "description": "Whether campaign is featured",
+            "default": false
+        },
+        "impact_statement": {
+            "type": "string",
+            "description": "What $1 achieves"
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp"
+        }
+    },
+    "required": [
+        "id",
+        "user_id",
+        "title",
+        "description",
+        "category",
+        "goal_amount"
+    ]
+}

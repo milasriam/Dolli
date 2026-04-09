@@ -1,0 +1,58 @@
+{
+    "title": "referrals",
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "integer",
+            "description": "Primary key, auto-increment"
+        },
+        "user_id": {
+            "type": "string",
+            "description": "Referrer user ID"
+        },
+        "campaign_id": {
+            "type": "integer",
+            "description": "Campaign ID"
+        },
+        "platform": {
+            "type": "string",
+            "description": "Platform: tiktok, instagram, twitter, direct"
+        },
+        "referral_token": {
+            "type": "string",
+            "description": "Unique referral token"
+        },
+        "clicks": {
+            "type": "integer",
+            "description": "Number of clicks",
+            "default": 0
+        },
+        "signups": {
+            "type": "integer",
+            "description": "Number of signups",
+            "default": 0
+        },
+        "donations_count": {
+            "type": "integer",
+            "description": "Number of donations from referral",
+            "default": 0
+        },
+        "donations_amount": {
+            "type": "number",
+            "description": "Total donation amount from referral",
+            "default": 0
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp"
+        }
+    },
+    "required": [
+        "id",
+        "user_id",
+        "campaign_id",
+        "platform",
+        "referral_token"
+    ]
+}

@@ -1,0 +1,46 @@
+{
+    "title": "donations",
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "integer",
+            "description": "Primary key, auto-increment"
+        },
+        "user_id": {
+            "type": "string",
+            "description": "Donor user ID"
+        },
+        "campaign_id": {
+            "type": "integer",
+            "description": "Campaign ID"
+        },
+        "amount": {
+            "type": "number",
+            "description": "Donation amount"
+        },
+        "payment_status": {
+            "type": "string",
+            "description": "Payment status: pending, paid, failed",
+            "default": "pending"
+        },
+        "source_platform": {
+            "type": "string",
+            "description": "Source: tiktok, instagram, direct, referral"
+        },
+        "referral_token": {
+            "type": "string",
+            "description": "Referral token if from referral"
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Donation timestamp"
+        }
+    },
+    "required": [
+        "id",
+        "user_id",
+        "campaign_id",
+        "amount"
+    ]
+}
