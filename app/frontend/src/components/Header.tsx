@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Heart, Menu, X, Plus, User, BarChart3, Compass, LogOut } from 'lucide-react';
+import { Menu, X, Plus, User, BarChart3, Compass, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function Header() {
@@ -14,10 +14,12 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center shadow-lg shadow-violet-500/25 group-hover:shadow-violet-500/40 transition-shadow">
-              <Heart className="w-5 h-5 text-white fill-white" />
-            </div>
+          <Link to="/" className="flex items-center gap-3 group">
+            <img
+              src="/brand/dolli-mark.svg"
+              alt="Dolli"
+              className="h-9 w-auto drop-shadow-[0_0_12px_rgba(59,130,246,0.35)] group-hover:opacity-90 transition-opacity"
+            />
             <span className="text-xl font-bold text-white tracking-tight">
               Dolli
             </span>
