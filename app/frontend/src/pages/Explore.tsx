@@ -43,6 +43,8 @@ export default function Explore() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -69,8 +71,10 @@ export default function Explore() {
 
     let cancelled = false;
     const isFirstPage = skip === 0;
-    if (isFirstPage) setLoading(true);
-    else setLoadingMore(true);
+    if (isFirstPage) {
+      setLoading(true);
+      setLoadError(false);
+    } else setLoadingMore(true);
     (async () => {
       try {
         const sortApi =
@@ -100,7 +104,11 @@ export default function Explore() {
         setCampaigns((prev) => (isFirstPage ? items : [...prev, ...items]));
       } catch (err) {
         console.error('Failed to load campaigns:', err);
-        if (!cancelled && isFirstPage) setCampaigns([]);
+        if (!cancelled && isFirstPage) {
+          setCampaigns([]);
+          setTotal(0);
+          setLoadError(true);
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -111,7 +119,7 @@ export default function Explore() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, user?.nsfw_filter_enabled, filterKey, skip]);
+  }, [user?.id, user?.nsfw_filter_enabled, filterKey, skip, retryTick]);
 
   const hasMore = skip + campaigns.length < total;
 
@@ -130,10 +138,12 @@ export default function Explore() {
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
             <input
-              type="text"
+              type="search"
               placeholder="Search campaigns..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search campaigns"
+              autoComplete="off"
               className="w-full pl-12 pr-4 py-3.5 bg-[#13131A] border border-white/5 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-violet-500/50 transition-colors"
             />
           </div>
@@ -142,6 +152,8 @@ export default function Explore() {
             {categories.map((cat) => (
               <button
                 key={cat.value}
+                type="button"
+                aria-pressed={selectedCategory === cat.value}
                 onClick={() => setSelectedCategory(cat.value)}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                   selectedCategory === cat.value
@@ -162,6 +174,8 @@ export default function Explore() {
             ].map((sort) => (
               <button
                 key={sort.value}
+                type="button"
+                aria-pressed={sortBy === sort.value}
                 onClick={() => setSortBy(sort.value)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   sortBy === sort.value
@@ -176,7 +190,19 @@ export default function Explore() {
         </div>
 
         {/* Results */}
-        {loading ? (
+        {loadError && !loading && skip === 0 ? (
+          <div className="rounded-2xl border border-rose-500/30 bg-rose-950/20 px-6 py-14 text-center">
+            <p className="text-lg font-semibold text-white mb-2">Couldn’t load campaigns</p>
+            <p className="text-sm text-slate-400 mb-6">Check your connection and try again.</p>
+            <Button
+              type="button"
+              onClick={() => setRetryTick((n) => n + 1)}
+              className="rounded-xl bg-violet-600 hover:bg-violet-500 text-white border-0"
+            >
+              Try again
+            </Button>
+          </div>
+        ) : loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className="bg-[#13131A] rounded-2xl border border-white/5 h-80 animate-pulse" />

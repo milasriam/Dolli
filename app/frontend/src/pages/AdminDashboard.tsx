@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import Header from '@/components/Header';
 import {
   BarChart3, TrendingUp, Users, Share2, Heart, DollarSign,
-  ArrowUpRight, ArrowDownRight, Target, Zap, User, ShieldAlert,
+  ArrowUpRight, ArrowDownRight, Target, Zap, User, ShieldAlert, MousePointerClick,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -46,6 +46,13 @@ interface ModerationCampaignRow {
   created_at: string | null;
 }
 
+interface ProductEventSummary {
+  since_iso: string;
+  days: number;
+  total: number;
+  by_event: { event: string; count: number }[];
+}
+
 const platformIcons: Record<string, string> = {
   tiktok: '📱',
   instagram: '📸',
@@ -63,11 +70,15 @@ export default function AdminDashboard() {
   const [nsfwRows, setNsfwRows] = useState<ModerationCampaignRow[]>([]);
   const [nsfwTotal, setNsfwTotal] = useState(0);
   const [nsfwLoading, setNsfwLoading] = useState(false);
+  const [productEvents, setProductEvents] = useState<ProductEventSummary | null>(null);
 
   useEffect(() => {
     if (user) {
       void loadAnalytics();
-      if (isAdmin) void loadNsfwQueue();
+      if (isAdmin) {
+        void loadNsfwQueue();
+        void loadProductEvents();
+      }
     } else {
       setLoading(false);
     }
@@ -87,6 +98,21 @@ export default function AdminDashboard() {
       console.error('Failed to load analytics:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadProductEvents = async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await client.apiCall.invoke({
+        url: '/api/v1/admin/analytics/product-events-summary?days=7',
+        method: 'GET',
+        data: {},
+      });
+      setProductEvents(res.data as ProductEventSummary);
+    } catch (err) {
+      console.error('Failed to load product events summary:', err);
+      setProductEvents(null);
     }
   };
 
@@ -172,6 +198,33 @@ export default function AdminDashboard() {
             </div>
           ))}
         </div>
+
+        {isAdmin && productEvents && (
+          <div className="mb-8 bg-[#13131A] rounded-2xl border border-white/5 p-6">
+            <h3 className="text-lg font-bold mb-1 flex items-center gap-2">
+              <MousePointerClick className="w-5 h-5 text-cyan-400" />
+              Web product events
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              Last {productEvents.days} days · {productEvents.total.toLocaleString()} total · since{' '}
+              {new Date(productEvents.since_iso).toLocaleString()}
+            </p>
+            {productEvents.by_event.length === 0 ? (
+              <p className="text-sm text-slate-500">No events recorded yet. Ensure Alembic migration for client events is applied.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {productEvents.by_event.map((row) => (
+                  <div key={row.event} className="rounded-xl bg-white/5 border border-white/5 px-3 py-3">
+                    <div className="text-xl font-bold text-white">{row.count.toLocaleString()}</div>
+                    <div className="text-[11px] text-slate-500 truncate mt-0.5" title={row.event}>
+                      {row.event}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Referral Funnel */}

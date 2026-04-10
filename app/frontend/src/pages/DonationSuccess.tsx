@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { client } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Heart, Share2, Trophy, ArrowRight, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import confetti from 'canvas-confetti';
+import { trackClientEvent } from '@/lib/productAnalytics';
 
 const MAX_VERIFY_ROUNDS = 20;
 
@@ -39,6 +40,7 @@ export default function DonationSuccess() {
   const [verifyStalled, setVerifyStalled] = useState(false);
   const [verifyAttempt, setVerifyAttempt] = useState(0);
   const [verifyPass, setVerifyPass] = useState(0);
+  const paidTracked = useRef(false);
 
   useEffect(() => {
     if (campaignId) {
@@ -102,6 +104,17 @@ export default function DonationSuccess() {
       cancelled = true;
     };
   }, [invoiceId, provider, initialStatus, verifyPass]);
+
+  useEffect(() => {
+    if (paymentStatus !== 'paid' || paidTracked.current) return;
+    paidTracked.current = true;
+    const cid = campaignId ? Number(campaignId) : NaN;
+    trackClientEvent('donate_success', {
+      ...(Number.isFinite(cid) ? { campaign_id: cid } : {}),
+      ...(invoiceId ? { invoice_id: invoiceId } : {}),
+      provider,
+    });
+  }, [paymentStatus, campaignId, invoiceId, provider]);
 
   useEffect(() => {
     if (paymentStatus === 'paid') {

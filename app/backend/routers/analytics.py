@@ -1,20 +1,24 @@
+import json
 import logging
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case
 from typing import List, Optional
 
 from core.database import get_db
-from dependencies.auth import get_current_user, get_optional_current_user
+from dependencies.auth import get_admin_user, get_current_user, get_optional_current_user
 from schemas.auth import UserResponse
 from models.donations import Donations
 from models.campaigns import Campaigns
 from models.referrals import Referrals
 from models.user_profiles import User_profiles
+from models.client_product_events import ClientProductEvent
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
+admin_router = APIRouter(prefix="/api/v1/admin/analytics", tags=["admin", "analytics"])
 logger = logging.getLogger(__name__)
 
 
@@ -244,14 +248,31 @@ class ClientEventBody(BaseModel):
     event: str = Field(..., max_length=64)
     payload: dict = Field(default_factory=dict)
 
+    @field_validator("event")
+    @classmethod
+    def normalize_event(cls, v: str) -> str:
+        s = (v or "").strip()
+        if not s:
+            raise ValueError("event is required")
+        return s[:64]
+
+    @field_validator("payload")
+    @classmethod
+    def payload_size(cls, v: dict) -> dict:
+        raw = json.dumps(v, ensure_ascii=False, default=str)
+        if len(raw) > 4096:
+            raise ValueError("payload too large")
+        return v
+
 
 @router.post("/client-event", status_code=204)
 async def client_event(
     body: ClientEventBody,
     request: Request,
+    db: AsyncSession = Depends(get_db),
     viewer: Optional[UserResponse] = Depends(get_optional_current_user),
 ):
-    """Lightweight product analytics (logged server-side; extend to warehouse later)."""
+    """Product analytics: logged and stored append-only when the DB table exists."""
     uid = viewer.id if viewer else None
     logger.info(
         "client_event event=%r user_id=%r ip=%r payload=%r",
@@ -260,4 +281,60 @@ async def client_event(
         request.client.host if request.client else None,
         body.payload,
     )
+    try:
+        row = ClientProductEvent(
+            event=body.event,
+            user_id=uid,
+            payload=body.payload or {},
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(row)
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        logger.warning("client_event DB write failed (run migrations?): %s", exc, exc_info=True)
     return Response(status_code=204)
+
+
+class ProductEventBucket(BaseModel):
+    event: str
+    count: int
+
+
+class ProductEventSummaryResponse(BaseModel):
+    since_iso: str
+    days: int
+    total: int
+    by_event: List[ProductEventBucket]
+
+
+@admin_router.get("/product-events-summary", response_model=ProductEventSummaryResponse)
+async def product_events_summary(
+    days: int = Query(7, ge=1, le=90),
+    _admin: UserResponse = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Aggregated client-side product events (admin)."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    try:
+        result = await db.execute(
+            select(ClientProductEvent.event, func.count(ClientProductEvent.id))
+            .where(ClientProductEvent.created_at >= since)
+            .group_by(ClientProductEvent.event)
+            .order_by(func.count(ClientProductEvent.id).desc())
+        )
+        rows = result.all()
+        total_row = await db.execute(
+            select(func.count(ClientProductEvent.id)).where(ClientProductEvent.created_at >= since)
+        )
+        total = int(total_row.scalar() or 0)
+    except Exception as exc:
+        logger.exception("product_events_summary query failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Could not load event summary") from exc
+
+    return ProductEventSummaryResponse(
+        since_iso=since.isoformat(),
+        days=days,
+        total=total,
+        by_event=[ProductEventBucket(event=r[0], count=int(r[1])) for r in rows],
+    )

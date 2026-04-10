@@ -25,6 +25,7 @@ import {
   qrCodeImageUrl,
 } from '@/lib/shareOutbound';
 import { copyForSurface, type ShareSurface, type ShareTone } from '@/lib/shareCopyTemplates';
+import { trackClientEvent } from '@/lib/productAnalytics';
 import {
   renderShareCardPng,
   type ShareCardFormat,
@@ -141,6 +142,15 @@ export function ShareCampaignDialog({
     [campaignTitle, context, raisedAmount, goalAmount, progressPct, donorCount, customLine],
   );
 
+  function trackShare(kind: string, platform: string) {
+    trackClientEvent('share_action', {
+      campaign_id: campaignId,
+      context,
+      kind,
+      platform,
+    });
+  }
+
   const nativeSupported = typeof navigator !== 'undefined' && !!navigator.share;
 
   useEffect(() => {
@@ -226,6 +236,7 @@ export function ShareCampaignDialog({
             url,
           });
           toast.success('Thanks for spreading the word!');
+          trackShare('native', 'native');
         } catch (e) {
           if ((e as Error).name === 'AbortError') return;
           throw e;
@@ -233,6 +244,7 @@ export function ShareCampaignDialog({
       } else {
         await navigator.clipboard.writeText(`${body}\n\n${url}`);
         toast.success('Copied — paste into any app.');
+        trackShare('copy', 'native_fallback');
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not share');
@@ -247,6 +259,7 @@ export function ShareCampaignDialog({
       const url = await resolveUrl(platform);
       const body = copyForSurface(platform as ShareSurface, copyVars, tone);
       openFn(url, body);
+      trackShare('open', platform);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not create link');
     } finally {
@@ -262,6 +275,7 @@ export function ShareCampaignDialog({
       openFacebookShare(url);
       await navigator.clipboard.writeText(`${body}\n\n${url}`);
       toast.success('Facebook opened — long caption copied. Paste if you want it on the post.');
+      trackShare('open', 'facebook');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not share');
     } finally {
@@ -277,6 +291,7 @@ export function ShareCampaignDialog({
       openLinkedInShare(url);
       await navigator.clipboard.writeText(`${body}\n\n${url}`);
       toast.success('LinkedIn opened — suggested post copied.');
+      trackShare('open', 'linkedin');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not share');
     } finally {
@@ -292,6 +307,7 @@ export function ShareCampaignDialog({
       await navigator.clipboard.writeText(`${body}\n\n${url}`);
       setCopied(true);
       toast.success('Copied — tuned for a general paste.');
+      trackShare('copy', 'copy');
       setTimeout(() => setCopied(false), 2200);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not copy');
@@ -307,6 +323,7 @@ export function ShareCampaignDialog({
       const body = copyForSurface(platform, copyVars, tone);
       await navigator.clipboard.writeText(`${body}\n\n${url}`);
       toast.success(successMessage);
+      trackShare('copy', platform);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not copy');
     } finally {
@@ -341,6 +358,7 @@ export function ShareCampaignDialog({
       a.click();
       URL.revokeObjectURL(a.href);
       toast.success('Saved — add to Stories, Reels, or Shorts as media.');
+      trackShare('card_download', 'image');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Download failed');
     } finally {
