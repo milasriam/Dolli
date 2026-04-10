@@ -267,12 +267,20 @@ export default function Index() {
       {/* Footer */}
       <footer className="border-t border-white/5 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center">
-              <Heart className="w-4 h-4 text-white fill-white" />
-            </div>
+          <Link
+            to="/"
+            className="flex items-center gap-2 group"
+            aria-label="Dolli home"
+          >
+            <img
+              src="/brand/dolli-mark.svg"
+              alt=""
+              width={28}
+              height={28}
+              className="h-7 w-7 shrink-0 drop-shadow-[0_0_12px_rgba(139,92,246,0.4)] group-hover:opacity-90 transition-opacity"
+            />
             <span className="font-bold text-white">Dolli</span>
-          </div>
+          </Link>
           <p className="text-sm text-slate-500">© 2026 Dolli. Social-native micro-donations for everyone.</p>
         </div>
       </footer>
