@@ -2,7 +2,25 @@
 
 from __future__ import annotations
 
+import re
 from urllib.parse import urlparse
+
+
+def normalize_cover_image_url(raw: str | None) -> str:
+    """
+    Map common Google Drive share URLs to /uc?export=view (direct image for <img src>).
+    Returns stripped string (may still be non-https); caller usually chains sanitize.
+    """
+    if not raw or not str(raw).strip():
+        return ""
+    s = str(raw).strip()
+    m = re.search(r"https://drive\.google\.com/file/d/([a-zA-Z0-9_-]+)(?:/[^?\s]*)?", s, re.I)
+    if m:
+        return f"https://drive.google.com/uc?export=view&id={m.group(1)}"
+    m2 = re.search(r"https://drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)", s, re.I)
+    if m2:
+        return f"https://drive.google.com/uc?export=view&id={m2.group(1)}"
+    return s
 
 
 def sanitize_https_media_url(raw: str | None, max_len: int = 2000) -> str:

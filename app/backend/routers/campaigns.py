@@ -1,18 +1,30 @@
 import json
 import logging
+import mimetypes
 import os
 import re
 import uuid
 from typing import List, Optional
+from urllib.parse import quote
 
 from datetime import datetime, date
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
+from core.cover_local_storage import (
+    cover_local_enabled,
+    mint_upload_token,
+    resolve_public_base,
+    safe_media_path,
+    verify_upload_token,
+    write_upload_body,
+)
+from core.media_urls import normalize_cover_image_url
 from core.nsfw_visibility import should_redact_nsfw_campaign
 from dependencies.auth import get_current_user, get_optional_current_user
 from models.auth import User as AuthUser
@@ -32,6 +44,14 @@ router = APIRouter(prefix="/api/v1/entities/campaigns", tags=["campaigns"])
 
 def _is_admin(user: UserResponse) -> bool:
     return (user.role or "").strip().lower() == "admin"
+
+
+def _normalize_drive_media_urls(d: dict) -> None:
+    """Google Drive share links are HTML; map common patterns to /uc?export=view for <img>."""
+    for key in ("image_url", "gif_url", "video_url"):
+        val = d.get(key)
+        if isinstance(val, str) and val.strip():
+            d[key] = normalize_cover_image_url(val)
 
 
 def _can_manage_campaign(campaign: Campaigns, user: UserResponse) -> bool:
@@ -292,7 +312,10 @@ async def presign_campaign_cover(
 ):
     """
     Presigned PUT URL for a campaign cover image (JPEG/PNG/WebP).
-    Set DOLLI_COVER_UPLOAD_BUCKET (and optionally DOLLI_COVER_PUBLIC_BASE_URL).
+
+    - **Remote OSS** (default): `DOLLI_COVER_UPLOAD_BUCKET` + `OSS_SERVICE_URL` + `OSS_API_KEY`.
+    - **Local disk** (staging/small installs): `DOLLI_COVER_STORAGE=local` + same bucket name +
+      `DOLLI_COVER_PUBLIC_BASE_URL` or `BACKEND_PUBLIC_URL` + `JWT_SECRET_KEY` for signing.
     """
     bucket = (os.environ.get("DOLLI_COVER_UPLOAD_BUCKET") or "").strip()
     if not bucket:
@@ -300,7 +323,6 @@ async def presign_campaign_cover(
             status_code=503,
             detail="Cover upload is not configured on this server. Paste an https image URL instead.",
         )
-    base = (os.environ.get("DOLLI_COVER_PUBLIC_BASE_URL") or "").rstrip("/")
     raw_name = body.filename.strip()
     ext = ""
     if "." in raw_name:
@@ -311,6 +333,35 @@ async def presign_campaign_cover(
         ext = "jpg"
     safe_stem = re.sub(r"[^a-zA-Z0-9._-]+", "-", raw_name.rsplit(".", 1)[0])[:80] or "cover"
     object_key = f"campaign-covers/{current_user.id}/{uuid.uuid4().hex}-{safe_stem}.{ext}"
+
+    if cover_local_enabled():
+        try:
+            token = mint_upload_token(user_id=str(current_user.id), object_key=object_key)
+        except ValueError as e:
+            logger.warning("local cover presign: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e),
+            ) from e
+        public = resolve_public_base()
+        if not public:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Local cover uploads need DOLLI_COVER_PUBLIC_BASE_URL or BACKEND_PUBLIC_URL "
+                    "(absolute HTTPS API base, no path)."
+                ),
+            )
+        upload_url = f"{public}/api/v1/entities/campaigns/cover-local-upload/{token}"
+        access_url = f"{public}/api/v1/entities/campaigns/cover-media?k={quote(object_key, safe='')}"
+        return PresignCoverResponse(
+            upload_url=upload_url,
+            access_url=access_url,
+            object_key=object_key,
+            expires_at="",
+        )
+
+    base = (os.environ.get("DOLLI_COVER_PUBLIC_BASE_URL") or "").rstrip("/")
     try:
         svc = StorageService()
         out = await svc.create_upload_url(FileUpDownRequest(bucket_name=bucket, object_key=object_key))
@@ -331,6 +382,41 @@ async def presign_campaign_cover(
         object_key=object_key,
         expires_at=out.expires_at or "",
     )
+
+
+@router.put("/cover-local-upload/{token}")
+async def cover_local_upload_put(token: str, request: Request):
+    """Write raw bytes for one signed cover upload (used when DOLLI_COVER_STORAGE=local)."""
+    try:
+        _uid, object_key = verify_upload_token(token)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid or expired upload token.",
+        )
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty body")
+    try:
+        await write_upload_body(object_key, body)
+    except ValueError as e:
+        msg = str(e).lower()
+        code = status.HTTP_413_REQUEST_ENTITY_TOO_LARGE if "too large" in msg else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(e)) from e
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/cover-media")
+async def cover_local_media_get(k: str = Query(..., min_length=16, max_length=500)):
+    """Public GET for a cover stored on local disk (local cover mode)."""
+    try:
+        path = safe_media_path(k)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid cover path")
+    if not path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(str(path), media_type=media_type)
 
 
 @router.get("/all", response_model=CampaignsListResponse)
@@ -531,6 +617,7 @@ async def create_campaigns(
             )
 
         payload = data.model_dump()
+        _normalize_drive_media_urls(payload)
         payload["user_id"] = current_user.id
         result = await service.create(payload)
         if not result:
@@ -561,7 +648,9 @@ async def create_campaignss_batch(
     
     try:
         for item_data in request.items:
-            result = await service.create(item_data.model_dump())
+            dumped = item_data.model_dump()
+            _normalize_drive_media_urls(dumped)
+            result = await service.create(dumped)
             if result:
                 results.append(result)
         
@@ -616,6 +705,7 @@ async def update_campaigns(
 
     update_dict = {k: v for k, v in data.model_dump().items() if v is not None}
     update_dict = _sanitize_owner_campaign_update(update_dict, current_user)
+    _normalize_drive_media_urls(update_dict)
 
     if not _is_admin(current_user):
         touches_content = bool(_CAMPAIGN_CONTENT_FIELDS.intersection(update_dict.keys()))

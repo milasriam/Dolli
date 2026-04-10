@@ -13,6 +13,7 @@ import {
   type CampaignAiStatus,
 } from '@/lib/campaignAiDraft';
 import { uploadCoverFile } from '@/lib/campaignCoverUpload';
+import { normalizePastedCoverImageUrl } from '@/lib/coverImageUrl';
 import { trackClientEvent } from '@/lib/productAnalytics';
 import { CAMPAIGN_CATEGORIES } from '@/lib/campaignCategories';
 import { getAPIBaseURL } from '@/lib/config';
@@ -798,8 +799,16 @@ export default function CreateCampaign() {
               <span className="text-sm font-semibold">Visual story</span>
             </div>
             <p className="text-xs text-slate-500">
-              Strong cover art drives shares. Paste direct links (HTTPS). Video wins attention in feeds; GIF adds motion
-              without sound.
+              Strong cover art drives shares. Use a <span className="text-slate-400">direct HTTPS image URL</span>{' '}
+              (the link should open only the picture — e.g. Unsplash, Imgur “direct link”, or Google Drive{' '}
+              <code className="text-slate-400">…/uc?export=view&amp;id=…</code>
+              ). Normal “share” Drive links are a web page, not an image — we rewrite common Drive formats on blur.
+            </p>
+            <p className="text-xs text-amber-200/80">
+              Upload button needs server storage: <code className="text-amber-100/90">OSS_SERVICE_URL</code>,{' '}
+              <code className="text-amber-100/90">OSS_API_KEY</code>, <code className="text-amber-100/90">DOLLI_COVER_UPLOAD_BUCKET</code>
+              , and usually <code className="text-amber-100/90">DOLLI_COVER_PUBLIC_BASE_URL</code> on the API host. Until then,
+              paste a URL.
             </p>
             <div>
               <label className="block text-sm font-semibold text-white mb-2">
@@ -810,6 +819,10 @@ export default function CreateCampaign() {
                 <Input
                   value={form.image_url}
                   onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                  onBlur={() => {
+                    const n = normalizePastedCoverImageUrl(form.image_url);
+                    if (n !== form.image_url) setForm((p) => ({ ...p, image_url: n }));
+                  }}
                   placeholder="https://…jpg or png — fallback poster if you add video"
                   className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl h-12 flex-1"
                 />

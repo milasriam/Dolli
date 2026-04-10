@@ -128,6 +128,18 @@ To test **Create campaign** from the UI without a prior paid donation, set in `/
 
 Then `systemctl restart dolli-backend-staging`. **Do not** enable this on production — there the give-first rule stays.
 
+### Staging: cover image upload (Create Campaign → upload button)
+
+The **upload** control calls `POST /api/v1/entities/campaigns/presign-cover`, which requires **object storage** in env (same pattern as prod):
+
+- `OSS_SERVICE_URL` and `OSS_API_KEY` — backend talks to your OSS API (`StorageService`).
+- `DOLLI_COVER_UPLOAD_BUCKET` — bucket name for campaign cover objects.
+- `DOLLI_COVER_PUBLIC_BASE_URL` (optional but typical) — public HTTPS base for `access_url` if the presign response does not include a full URL.
+
+Until these are set, the API returns **503** with *“Cover upload is not configured…”* — users should **paste a direct `https://…` image URL** instead.
+
+**Google Drive:** a normal “anyone with the link” URL opens a **web page**, not raw bytes. Use a direct form such as `https://drive.google.com/uc?export=view&id=FILE_ID`, or host the image on a CDN. The app now rewrites common Drive `/file/d/…/view` and `/open?id=…` links to the `uc?export=view` form on save and when the cover field blurs in the UI.
+
 ### Staging: campaign AI (Create Campaign → Generate draft)
 
 The UI calls `GET /api/v1/campaigns/ai-status`. If `hub_configured` is false, the orange banner appears. Configure **one** of the following in `/etc/dolli/staging.env`, then `systemctl restart dolli-backend-staging`:
