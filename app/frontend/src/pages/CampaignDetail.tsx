@@ -51,6 +51,8 @@ interface Campaign {
 
 type PaymentProvider = 'halyk_epay' | 'kaspi_pay';
 
+const GIFT_AMOUNTS = [1, 3, 5, 10, 25] as const;
+
 function loadScript(src: string) {
   return new Promise<void>((resolve, reject) => {
     const existing = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement | null;
@@ -91,6 +93,7 @@ export default function CampaignDetail() {
   const [showPostPublish, setShowPostPublish] = useState(false);
   const [followingOrganizer, setFollowingOrganizer] = useState<boolean | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
+  const [giftAmount, setGiftAmount] = useState(1);
 
   const referrer = searchParams.get('ref');
   const fromCreate = searchParams.get('from') === 'create';
@@ -101,6 +104,10 @@ export default function CampaignDetail() {
       trackClick();
     }
   }, [id, user?.nsfw_filter_enabled]);
+
+  useEffect(() => {
+    setGiftAmount(1);
+  }, [id]);
 
   useEffect(() => {
     if (campaign && fromCreate && user?.id === campaign.user_id) {
@@ -286,9 +293,9 @@ export default function CampaignDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <div className="min-h-screen bg-background text-foreground">
         <Header />
-        <div className="pt-24 flex items-center justify-center">
+        <div id="main-content" tabIndex={-1} className="flex items-center justify-center pt-24 outline-none">
           <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
@@ -297,9 +304,9 @@ export default function CampaignDetail() {
 
   if (!campaign) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <div className="min-h-screen bg-background text-foreground">
         <Header />
-        <div className="pt-24 text-center">
+        <div id="main-content" tabIndex={-1} className="pt-24 text-center outline-none">
           <h2 className="text-2xl font-bold mb-4">Campaign Not Found</h2>
           <Link to="/" className="text-violet-400 hover:text-violet-300">Go Home</Link>
         </div>
@@ -313,19 +320,26 @@ export default function CampaignDetail() {
   const donateDisabled = donating || nsfwBlocked || !paymentsLive;
 
   return (
-    <div className="min-h-screen bg-[#0A0A0F] text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <Header />
 
-      <div className="pt-20 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto max-w-6xl px-4 pb-16 pt-20 outline-none sm:px-6 lg:px-8"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <Link to="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
+          >
             <ArrowLeft className="w-4 h-4" /> Back to campaigns
           </Link>
           <Button
             type="button"
             variant="outline"
             onClick={() => setShareOpen(true)}
-            className="rounded-xl border-violet-500/35 bg-violet-500/10 text-violet-200 hover:bg-violet-500/20 hover:text-white border"
+            className="rounded-xl border-violet-500/35 bg-violet-500/10 text-violet-800 hover:bg-violet-500/15 hover:text-violet-950 dark:text-violet-200 dark:hover:bg-violet-500/20 dark:hover:text-white"
           >
             <Share2 className="w-4 h-4 mr-2" />
             Share
@@ -348,7 +362,7 @@ export default function CampaignDetail() {
         />
 
         {showPostPublish && campaign && (
-          <div className="mb-6 rounded-2xl border border-emerald-500/35 bg-gradient-to-br from-emerald-950/40 to-violet-950/30 p-5 relative overflow-hidden">
+          <div className="relative mb-6 overflow-hidden rounded-2xl border border-border bg-muted/70 p-5 dark:border-emerald-500/35 dark:bg-gradient-to-br dark:from-emerald-950/40 dark:to-violet-950/30">
             <button
               type="button"
               aria-label="Dismiss"
@@ -356,16 +370,16 @@ export default function CampaignDetail() {
                 setShowPostPublish(false);
                 navigate(`/campaign/${campaign.id}`, { replace: true });
               }}
-              className="absolute top-3 right-3 p-1 rounded-lg text-slate-500 hover:text-white hover:bg-white/10"
+              className="absolute right-3 top-3 rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <X className="w-5 h-5" />
             </button>
-            <p className="text-lg font-bold text-white pr-8">You’re live — now spread the word</p>
-            <p className="text-sm text-slate-400 mt-1 mb-4">
+            <p className="pr-8 text-lg font-bold text-foreground">You’re live — now spread the word</p>
+            <p className="text-sm text-muted-foreground mt-1 mb-4">
               Share links use rich previews. Add a strong cover photo or short video if you haven’t yet.
             </p>
-            <ul className="text-xs text-slate-500 space-y-1 mb-4 list-disc list-inside">
-              <li>Open Share studio (below) for every social format</li>
+            <ul className="text-xs text-muted-foreground space-y-1 mb-4 list-disc list-inside">
+              <li>Open “Share it your way” below for every social format</li>
               <li>Copy your public link from the share dialog</li>
               <li>On iPhone: Share → Add to Home Screen for an app-like shortcut (PWA)</li>
             </ul>
@@ -376,12 +390,12 @@ export default function CampaignDetail() {
                 className="rounded-xl bg-violet-600 hover:bg-violet-500 text-white border-0"
               >
                 <Share2 className="w-4 h-4 mr-2" />
-                Open share studio
+                Share it your way
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                className="rounded-xl border-white/15 bg-white/5 text-white"
+                className="rounded-xl border-border bg-background text-foreground hover:bg-muted/60"
                 onClick={async () => {
                   const u = `${window.location.origin}/api/share/campaign/${campaign.id}`;
                   await navigator.clipboard.writeText(u);
@@ -392,7 +406,7 @@ export default function CampaignDetail() {
                 Copy share link
               </Button>
             </div>
-            <p className="text-[11px] text-slate-600 mt-3 flex items-center gap-1">
+            <p className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground">
               <Smartphone className="w-3.5 h-3.5" />
               Tip: installed Dolli from the browser feels faster on the next visit.
             </p>
@@ -402,7 +416,7 @@ export default function CampaignDetail() {
         {referrer && (
           <div className="mb-6 p-4 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center gap-3">
             <Sparkles className="w-5 h-5 text-violet-400 flex-shrink-0" />
-            <p className="text-sm text-violet-300">
+            <p className="text-sm text-violet-800 dark:text-violet-300">
               You were invited by a friend! Your donation helps reach the goal faster.
             </p>
           </div>
@@ -426,7 +440,7 @@ export default function CampaignDetail() {
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           <div className="lg:col-span-3 space-y-6">
-            <div className="rounded-2xl overflow-hidden border border-white/5 bg-black">
+            <div className="rounded-2xl overflow-hidden border border-border bg-black">
               <CampaignHeroMedia
                 videoUrl={campaign.video_url}
                 gifUrl={campaign.gif_url}
@@ -437,12 +451,12 @@ export default function CampaignDetail() {
 
             <div>
               <h1 className="text-3xl sm:text-4xl font-bold mb-4">{campaign.title}</h1>
-              <p className="text-slate-400 leading-relaxed text-lg">{campaign.description}</p>
+              <p className="text-muted-foreground leading-relaxed text-lg">{campaign.description}</p>
             </div>
 
             {organizerInsights && (
               <div
-                className={`rounded-2xl border border-white/10 bg-[#13131A] p-5 sm:p-6 ${organizerPromoCardClass(
+                className={`rounded-2xl border border-border bg-card p-5 sm:p-6 ${organizerPromoCardClass(
                   organizerInsights.curated_highlight as 'frame' | 'featured' | null | undefined,
                 )}`}
               >
@@ -451,11 +465,11 @@ export default function CampaignDetail() {
                     <UserCircle className="w-7 h-7 text-violet-300" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
                       Organizer
                     </p>
                     <div className="flex flex-wrap items-center gap-2 min-w-0">
-                      <p className="text-lg font-semibold text-white truncate">
+                      <p className="truncate text-lg font-semibold text-foreground">
                         {organizerInsights.display_name || 'Community member'}
                       </p>
                       {organizerInsights.is_verified_organization &&
@@ -484,7 +498,7 @@ export default function CampaignDetail() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {organizerInsights.is_verified_organization
                         ? 'This organizer is a verified organization on Dolli.'
                         : 'Public activity on Dolli — helps you see who is behind this fundraiser.'}
@@ -493,8 +507,8 @@ export default function CampaignDetail() {
                         : ''}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs text-slate-500">
-                        <span className="font-medium text-slate-400">
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-medium text-muted-foreground">
                           {(organizerInsights.organizer_follower_count ?? 0).toLocaleString()}
                         </span>{' '}
                         follower{(organizerInsights.organizer_follower_count ?? 0) === 1 ? '' : 's'} on Dolli
@@ -508,7 +522,7 @@ export default function CampaignDetail() {
                           onClick={() => void toggleFollowOrganizer()}
                           className={
                             followingOrganizer
-                              ? 'rounded-lg border-white/20 bg-transparent text-white hover:bg-white/10 h-9'
+                              ? 'h-9 rounded-lg border-border bg-transparent text-foreground hover:bg-muted/70'
                               : 'rounded-lg bg-violet-600 hover:bg-violet-500 text-white border-0 h-9'
                           }
                         >
@@ -532,17 +546,17 @@ export default function CampaignDetail() {
                       }`}
                     >
                       {organizerInsights.paid_donations_count != null && (
-                        <div className="rounded-xl bg-white/5 border border-white/5 px-4 py-3 flex gap-3">
+                        <div className="flex gap-3 rounded-xl border border-border bg-muted/50 px-4 py-3">
                           <div className="w-9 h-9 rounded-lg bg-pink-500/15 flex items-center justify-center flex-shrink-0">
                             <Gift className="w-4 h-4 text-pink-400" />
                           </div>
                           <div>
-                            <p className="text-sm font-semibold text-white">
+                            <p className="text-sm font-semibold text-foreground">
                               {organizerInsights.paid_donations_count === 0
                                 ? 'No completed gifts yet'
                                 : `${organizerInsights.paid_donations_count} completed gift${organizerInsights.paid_donations_count === 1 ? '' : 's'}`}
                             </p>
-                            <p className="text-[11px] text-slate-500 leading-snug">
+                            <p className="text-[11px] text-muted-foreground leading-snug">
                               {organizerInsights.paid_donations_count === 0
                                 ? 'They haven’t finished a paid donation on Dolli (yet).'
                                 : 'Paid donations they’ve made to any campaign on Dolli.'}
@@ -550,16 +564,16 @@ export default function CampaignDetail() {
                           </div>
                         </div>
                       )}
-                      <div className="rounded-xl bg-white/5 border border-white/5 px-4 py-3 flex gap-3">
+                      <div className="flex gap-3 rounded-xl border border-border bg-muted/50 px-4 py-3">
                         <div className="w-9 h-9 rounded-lg bg-violet-500/15 flex items-center justify-center flex-shrink-0">
                           <Megaphone className="w-4 h-4 text-violet-400" />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-white">
+                          <p className="text-sm font-semibold text-foreground">
                             {organizerInsights.campaigns_created_total} fundraiser
                             {organizerInsights.campaigns_created_total === 1 ? '' : 's'} created
                           </p>
-                          <p className="text-[11px] text-slate-500 leading-snug">
+                          <p className="text-[11px] text-muted-foreground leading-snug">
                             {organizerInsights.campaigns_active_count} live now
                             {organizerInsights.campaigns_created_total !== organizerInsights.campaigns_active_count
                               ? ` · ${organizerInsights.campaigns_created_total - organizerInsights.campaigns_active_count} draft or ended`
@@ -575,32 +589,41 @@ export default function CampaignDetail() {
             )}
 
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-[#13131A] rounded-xl p-4 border border-white/5 text-center">
+              <div className="bg-card rounded-xl p-4 border border-border text-center">
                 <Users className="w-5 h-5 text-violet-400 mx-auto mb-1" />
                 <div className="text-xl font-bold">{campaign.donor_count.toLocaleString()}</div>
-                <div className="text-xs text-slate-500">Donors</div>
+                <div className="text-xs text-muted-foreground">Donors</div>
               </div>
-              <div className="bg-[#13131A] rounded-xl p-4 border border-white/5 text-center">
+              <div className="bg-card rounded-xl p-4 border border-border text-center">
                 <Share2 className="w-5 h-5 text-blue-400 mx-auto mb-1" />
                 <div className="text-xl font-bold">{campaign.share_count.toLocaleString()}</div>
-                <div className="text-xs text-slate-500">Shares</div>
+                <div className="text-xs text-muted-foreground">Shares</div>
               </div>
-              <div className="bg-[#13131A] rounded-xl p-4 border border-white/5 text-center">
+              <div className="bg-card rounded-xl p-4 border border-border text-center">
                 <Clock className="w-5 h-5 text-amber-400 mx-auto mb-1" />
                 <div className="text-xl font-bold">{Math.round(progress)}%</div>
-                <div className="text-xs text-slate-500">Funded</div>
+                <div className="text-xs text-muted-foreground">Funded</div>
               </div>
             </div>
           </div>
 
           <div className="lg:col-span-2">
-            <div className="sticky top-24 bg-[#13131A] rounded-2xl border border-white/5 p-6 space-y-6">
+            <h2 id="give-panel-heading" className="sr-only">
+              Donate and share this fundraiser
+            </h2>
+            <div
+              className="sticky top-24 space-y-6 rounded-2xl border border-border bg-card p-6"
+              aria-labelledby="give-panel-heading"
+            >
               {nsfwBlocked && (
-                <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                  <p className="font-semibold text-white mb-1">Sensitive fundraiser</p>
-                  <p className="text-xs text-amber-200/90 leading-relaxed">
+                <div className="rounded-xl border border-amber-500/40 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-500/35 dark:bg-amber-500/10 dark:text-amber-100">
+                  <p className="mb-1 font-semibold text-amber-950 dark:text-white">Sensitive fundraiser</p>
+                  <p className="text-xs leading-relaxed text-amber-900/90 dark:text-amber-200/90">
                     Your NSFW filter is on. Open{' '}
-                    <Link to="/profile" className="underline font-semibold text-white hover:text-amber-50">
+                    <Link
+                      to="/profile"
+                      className="font-semibold text-amber-950 underline hover:text-amber-800 dark:text-white dark:hover:text-amber-50"
+                    >
                       profile settings
                     </Link>{' '}
                     and turn the filter off to see the full page and donate.
@@ -608,9 +631,9 @@ export default function CampaignDetail() {
                 </div>
               )}
               {!paymentsLive && (
-                <div className="rounded-xl border border-sky-500/35 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
-                  <p className="font-semibold text-white mb-1">Checkout coming soon</p>
-                  <p className="text-xs text-sky-200/90 leading-relaxed">
+                <div className="rounded-xl border border-sky-500/40 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-500/35 dark:bg-sky-500/10 dark:text-sky-100">
+                  <p className="mb-1 font-semibold text-sky-950 dark:text-white">Checkout coming soon</p>
+                  <p className="text-xs leading-relaxed text-sky-900/90 dark:text-sky-200/90">
                     Card and wallet payments are not connected on this environment yet. You can still explore
                     campaigns and share them — donations will open here shortly.
                   </p>
@@ -621,64 +644,108 @@ export default function CampaignDetail() {
                   <span className="text-2xl font-bold text-emerald-400">
                     ${campaign.raised_amount.toLocaleString()}
                   </span>
-                  <span className="text-slate-500 text-sm mt-2">
+                  <span className="text-muted-foreground text-sm mt-2">
                     of ${campaign.goal_amount.toLocaleString()}
                   </span>
                 </div>
-                <div className="h-3 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-3 overflow-hidden rounded-full bg-muted">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-lg shadow-emerald-500/30 transition-all duration-1000"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <p className="text-xs text-slate-500 mt-2">
+                <p className="text-xs text-muted-foreground mt-2">
                   {campaign.donor_count.toLocaleString()} people have donated
                 </p>
               </div>
 
               {paymentsLive && lastFeeBps != null && (
-                <p className="text-[11px] text-slate-500 leading-relaxed">
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
                   Transparency: a platform fee of up to {(lastFeeBps / 100).toFixed(1)}% is recorded on the organizer
                   side at checkout. The amount you choose to give is unchanged.
                 </p>
               )}
 
               <div
-                className={`space-y-3 rounded-2xl border border-white/5 bg-black/20 p-4 ${
-                  !paymentsLive ? 'opacity-50 pointer-events-none' : ''
+                className={`space-y-3 rounded-2xl border border-border bg-muted/60 p-4 dark:bg-black/20 ${
+                  !paymentsLive ? 'pointer-events-none opacity-50' : ''
                 }`}
               >
-                <p className="text-sm font-semibold text-white">Payment method</p>
-                <div className="grid grid-cols-1 gap-2">
+                <p className="text-sm font-semibold text-foreground" id="gift-amount-label">
+                  Choose amount
+                </p>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  Micro-gifts stay impulse-sized — like a super-like, but it funds real work. Change any time before you
+                  pay.
+                </p>
+                <div
+                  className="flex flex-wrap gap-2"
+                  role="radiogroup"
+                  aria-labelledby="gift-amount-label"
+                >
+                  {GIFT_AMOUNTS.map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      aria-checked={giftAmount === amt}
+                      role="radio"
+                      disabled={donateDisabled}
+                      onClick={() => setGiftAmount(amt)}
+                      className={`min-h-11 min-w-[3.25rem] rounded-xl border px-3 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:opacity-50 ${
+                        giftAmount === amt
+                          ? 'border-emerald-500 bg-emerald-600/15 text-emerald-950 dark:border-emerald-400 dark:bg-emerald-500/15 dark:text-white'
+                          : 'border-border bg-muted text-muted-foreground hover:border-muted-foreground/30'
+                      }`}
+                    >
+                      ${amt}
+                    </button>
+                  ))}
+                </div>
+
+                <p className="text-sm font-semibold text-foreground" id="payment-method-label">
+                  Payment method
+                </p>
+                <div className="grid grid-cols-1 gap-2" role="group" aria-labelledby="payment-method-label">
                   <button
                     type="button"
+                    aria-pressed={selectedProvider === 'halyk_epay'}
                     onClick={() => setSelectedProvider('halyk_epay')}
-                    className={`rounded-xl border px-4 py-3 text-left transition-all ${
+                    className={`min-h-12 rounded-xl border px-4 py-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
                       selectedProvider === 'halyk_epay'
-                        ? 'border-emerald-400 bg-emerald-500/10 text-white'
-                        : 'border-white/10 bg-[#1A1A25] text-slate-300 hover:border-white/20'
+                        ? 'border-emerald-500 bg-emerald-600/15 text-emerald-950 dark:border-emerald-400 dark:bg-emerald-500/10 dark:text-white'
+                        : 'border-border bg-muted text-muted-foreground hover:border-muted-foreground/30'
                     }`}
                   >
                     <div className="font-medium">Halyk EPAY</div>
-                    <div className="text-xs text-slate-400">Cards, Apple Pay and Google Pay through the payment gateway</div>
+                    <div className="text-xs text-muted-foreground">Cards, Apple Pay and Google Pay through the payment gateway</div>
                   </button>
                   <button
                     type="button"
+                    aria-pressed={selectedProvider === 'kaspi_pay'}
                     onClick={() => setSelectedProvider('kaspi_pay')}
-                    className={`rounded-xl border px-4 py-3 text-left transition-all ${
+                    className={`min-h-12 rounded-xl border px-4 py-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/80 focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
                       selectedProvider === 'kaspi_pay'
-                        ? 'border-emerald-400 bg-emerald-500/10 text-white'
-                        : 'border-white/10 bg-[#1A1A25] text-slate-300 hover:border-white/20'
+                        ? 'border-emerald-500 bg-emerald-600/15 text-emerald-950 dark:border-emerald-400 dark:bg-emerald-500/10 dark:text-white'
+                        : 'border-border bg-muted text-muted-foreground hover:border-muted-foreground/30'
                     }`}
                   >
                     <div className="font-medium">Kaspi Pay</div>
-                    <div className="text-xs text-slate-400">Remote Kaspi payment link for Kazakhstan-first checkout</div>
+                    <div className="text-xs text-muted-foreground">Remote Kaspi payment link for Kazakhstan-first checkout</div>
                   </button>
                 </div>
               </div>
 
+              {campaign.donor_count > 0 && paymentsLive && !nsfwBlocked && (
+                <p className="text-center text-[11px] text-muted-foreground">
+                  <span className="font-semibold text-muted-foreground">
+                    {campaign.donor_count.toLocaleString()} people
+                  </span>{' '}
+                  already chipped in — mostly small amounts. You’re not doing this alone.
+                </p>
+              )}
+
               <Button
-                onClick={() => handleDonate(1)}
+                onClick={() => handleDonate(giftAmount)}
                 disabled={donateDisabled}
                 className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-bold text-lg py-7 rounded-2xl shadow-2xl shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all border-0"
               >
@@ -690,27 +757,19 @@ export default function CampaignDetail() {
                     {!paymentsLive
                       ? 'Payments soon'
                       : selectedProvider === 'kaspi_pay'
-                        ? 'Donate with Kaspi'
-                        : 'Donate $1'}
+                        ? `Send $${giftAmount} · Kaspi`
+                        : `Send $${giftAmount}`}
                   </>
                 )}
               </Button>
 
-              <div className="grid grid-cols-3 gap-2">
-                {[5, 10, 25].map((amount) => (
-                  <Button
-                    key={amount}
-                    onClick={() => handleDonate(amount)}
-                    disabled={donateDisabled}
-                    variant="outline"
-                    className="!bg-transparent border-white/10 text-white hover:border-emerald-500/50 hover:text-emerald-400 rounded-xl transition-all"
-                  >
-                    ${amount}
-                  </Button>
-                ))}
-              </div>
+              <p className="text-center text-[11px] text-muted-foreground">
+                {paymentsLive
+                  ? 'Checkout opens on your bank’s page — Dolli never stores your card. No subscription, no guilt-trip upsell.'
+                  : 'When payments go live, you’ll finish in a few taps and land right back here.'}
+              </p>
 
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 {!paymentsLive
                   ? 'When payments go live, you’ll complete checkout in a few taps from this page.'
                   : selectedProvider === 'halyk_epay'
@@ -718,13 +777,13 @@ export default function CampaignDetail() {
                     : 'Kaspi Pay currently opens a remote payment link. Final confirmation is handled after merchant-side payment confirmation.'}
               </p>
 
-              <div className="border-t border-white/5 pt-5">
-                <p className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+              <div className="border-t border-border pt-5">
+                <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
                   <Share2 className="w-4 h-4 text-violet-400" />
                   Multiply the impact
                 </p>
-                <p className="text-xs text-slate-500 mb-4">
-                  Native share, WhatsApp, Telegram, QR, and more — with a personal link when you’re signed in.
+                <p className="text-xs text-muted-foreground mb-4">
+                  Same energy as reposting a story — but friends land with your link so impact can compound.
                 </p>
                 <Button
                   type="button"
@@ -732,13 +791,13 @@ export default function CampaignDetail() {
                   className="w-full rounded-xl bg-gradient-to-r from-violet-600/90 to-pink-600/90 hover:from-violet-500 hover:to-pink-500 text-white font-semibold border-0 py-6 shadow-lg shadow-violet-500/15"
                 >
                   <Share2 className="w-5 h-5 mr-2" />
-                  Open share studio
+                  Share it your way
                 </Button>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

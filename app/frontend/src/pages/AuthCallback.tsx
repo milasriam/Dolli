@@ -23,16 +23,20 @@ export default function AuthCallback() {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <AuthChrome />
-      <div className="flex flex-1 flex-col items-center justify-center px-4">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex flex-1 flex-col items-center justify-center px-4 outline-none"
+      >
         <div
           className="h-12 w-12 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-400"
           role="status"
           aria-label="Loading"
         />
-        <p className="mt-6 text-sm text-slate-400">Finishing sign-in…</p>
-      </div>
+        <p className="mt-6 text-sm text-muted-foreground">Finishing sign-in…</p>
+      </main>
     </div>
   );
 }

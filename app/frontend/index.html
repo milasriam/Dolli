@@ -2,10 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function () {
+        try {
+          var k = 'dolli-theme';
+          var t = localStorage.getItem(k) || 'system';
+          var dark =
+            t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+          document.documentElement.dataset.theme = t;
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.dataset.theme = 'dark';
+        }
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
     <title>Dolli — Social-Native Micro-Donation Engine</title>
     <meta name="description" content="One-tap $1 donations that spread through social media. Dolli is a micro-donation platform built for viral giving on TikTok and Instagram." />
-    <meta name="theme-color" content="#0A0A0F" />
+    <meta id="dolli-theme-color" name="theme-color" content="#0A0A0F" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

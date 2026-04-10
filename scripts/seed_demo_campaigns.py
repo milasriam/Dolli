@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-Idempotent pack of demo campaigns for staging / QA (Dolli scenario lab).
+Staging-only UI scenario catalog (many campaigns covering edge cases in the product).
+
+This script is not imported by the app or pytest — run explicitly, or via
+``./scripts/deploy.sh staging`` (production deploy never runs it).
 
 Inserts rows only if none exist with titles starting with DEMO_TITLE_PREFIX.
 Requires DATABASE_URL in the environment. Run from repo root:

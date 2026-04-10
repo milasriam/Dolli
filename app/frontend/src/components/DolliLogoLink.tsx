@@ -27,8 +27,8 @@ export function DolliLogoLink({ variant = 'header' }: Props) {
       <span
         className={
           isHeader
-            ? 'text-xl font-bold text-white tracking-tight'
-            : 'font-bold text-white'
+            ? 'text-xl font-bold text-foreground tracking-tight'
+            : 'font-bold text-foreground'
         }
       >
         Dolli

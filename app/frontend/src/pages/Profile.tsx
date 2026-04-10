@@ -4,14 +4,15 @@ import { client } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/lib/auth';
 import { fetchEarlyDonorMilestone, type EarlyDonorMilestone } from '@/lib/earlyDonorMilestone';
-import { fetchMyFriends } from '@/lib/friends';
+import { fetchMyFriends, type FriendBrief } from '@/lib/friends';
+import { fetchFollowStats, fetchMyFollowing, type FollowStats, type FollowingBrief } from '@/lib/follows';
 import { profileHeroPromoClass } from '@/lib/curatedHighlight';
 import Header from '@/components/Header';
 import { SiteFooter } from '@/components/SiteFooter';
 import { OwnerCampaignControls } from '@/components/OwnerCampaignControls';
 import { toast } from 'sonner';
 import {
-  Heart, Trophy, Flame, Share2, TrendingUp, User, HeartHandshake,
+  Heart, Trophy, Flame, Share2, TrendingUp, User, HeartHandshake, UserPlus, Megaphone,
   Copy, CheckCircle2, Pencil, Check, X,
   Zap, Users, Gift, Sparkles,
 } from 'lucide-react';
@@ -132,7 +133,9 @@ export default function Profile() {
   const [nameDraft, setNameDraft] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
   const [earlyDonor, setEarlyDonor] = useState<EarlyDonorMilestone | null>(null);
-  const [friendCount, setFriendCount] = useState<number | null>(null);
+  const [followStats, setFollowStats] = useState<FollowStats | null>(null);
+  const [followingPeople, setFollowingPeople] = useState<FollowingBrief[]>([]);
+  const [friendsPeople, setFriendsPeople] = useState<FriendBrief[]>([]);
 
   const user = USE_MOCK_DATA ? MOCK_USER : authUser;
   const isLoading = USE_MOCK_DATA ? false : (authLoading || loading);
@@ -143,6 +146,14 @@ export default function Profile() {
       setBadges(MOCK_BADGES);
       setReferrals(MOCK_REFERRALS);
       setCampaigns(MOCK_CAMPAIGNS);
+      setFollowStats({ follower_count: 128, following_count: 42, mutual_friend_count: 9 });
+      setFollowingPeople(
+        ['River Org', 'Sam K.', 'Mira Chen', 'Demo Creator'].map((name, i) => ({
+          user_id: `mock-${i}`,
+          name,
+        })),
+      );
+      setFriendsPeople([{ user_id: 'mock-f1', name: 'Alex' }, { user_id: 'mock-f2', name: 'Jordan' }]);
       setLoading(false);
       return;
     }
@@ -167,24 +178,38 @@ export default function Profile() {
   const loadData = async () => {
     if (!user?.id) return;
     try {
-      const [donationsRes, badgesRes, referralsRes, campaignsRes, friendsRes] = await Promise.all([
-        client.entities.donations.query({ sort: '-created_at', limit: 50 }),
-        client.entities.badges.query({ limit: 50 }),
-        client.entities.referrals.query({ sort: '-created_at', limit: 50 }),
-        client.entities.campaigns.query({
-          query: { user_id: user.id },
-          sort: '-created_at',
-          limit: 50,
-        }),
-        fetchMyFriends(),
-      ]);
+      const [donationsRes, badgesRes, referralsRes, campaignsRes, friendsRes, statsRes, followingRes] =
+        await Promise.all([
+          client.entities.donations.query({ sort: '-created_at', limit: 50 }),
+          client.entities.badges.query({ limit: 50 }),
+          client.entities.referrals.query({ sort: '-created_at', limit: 50 }),
+          client.entities.campaigns.query({
+            query: { user_id: user.id },
+            sort: '-created_at',
+            limit: 50,
+          }),
+          fetchMyFriends(),
+          fetchFollowStats(user.id),
+          fetchMyFollowing(),
+        ]);
       setDonations(donationsRes?.data?.items || []);
       setBadges(badgesRes?.data?.items || []);
       setReferrals(referralsRes?.data?.items || []);
       setCampaigns(campaignsRes?.data?.items || []);
-      setFriendCount(friendsRes?.total ?? 0);
+      setFriendsPeople(friendsRes?.items ?? []);
+      setFollowStats(
+        statsRes ?? {
+          follower_count: 0,
+          following_count: followingRes?.total ?? followingRes?.items?.length ?? 0,
+          mutual_friend_count: friendsRes?.total ?? friendsRes?.items?.length ?? 0,
+        },
+      );
+      setFollowingPeople(followingRes?.items ?? []);
     } catch (err) {
       console.error('Failed to load profile data:', err);
+      setFollowStats({ follower_count: 0, following_count: 0, mutual_friend_count: 0 });
+      setFollowingPeople([]);
+      setFriendsPeople([]);
     } finally {
       setLoading(false);
     }
@@ -215,11 +240,15 @@ export default function Profile() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+      <div className="flex min-h-screen flex-col bg-background text-foreground">
         <Header />
-        <div className="flex flex-1 items-center justify-center pt-24">
-          <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex flex-1 items-center justify-center pt-24 outline-none"
+        >
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
+        </main>
         <SiteFooter />
       </div>
     );
@@ -227,14 +256,18 @@ export default function Profile() {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+      <div className="flex min-h-screen flex-col bg-background text-foreground">
         <Header />
-        <div className="mx-auto w-full max-w-md flex-1 px-4 pb-12 pt-24 text-center">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-md flex-1 px-4 pb-12 pt-24 text-center outline-none"
+        >
           <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center mx-auto mb-6">
             <User className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-2xl font-bold mb-3">Sign in to see your impact</h2>
-          <p className="text-slate-400 mb-6">Track your donations, badges, and referral impact.</p>
+          <p className="text-muted-foreground mb-6">Track your donations, badges, and referral impact.</p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold px-8 py-6 rounded-2xl shadow-2xl shadow-violet-500/25 border-0">
               <Link to="/login">Sign in</Link>
@@ -242,12 +275,12 @@ export default function Profile() {
             <Button
               asChild
               variant="outline"
-              className="border-white/20 text-white hover:bg-white/5 font-semibold px-8 py-6 rounded-2xl"
+              className="rounded-2xl border-border px-8 py-6 font-semibold text-foreground hover:bg-muted/60"
             >
               <Link to="/register">Create account</Link>
             </Button>
           </div>
-        </div>
+        </main>
         <SiteFooter />
       </div>
     );
@@ -315,26 +348,30 @@ export default function Profile() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <Header />
 
-      <div className="mx-auto w-full max-w-2xl flex-1 px-4 pb-16 pt-20 sm:px-6">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-3xl flex-1 px-4 pb-16 pt-20 outline-none sm:px-6"
+      >
         {/* Profile Header */}
         <div
-          className={`bg-[#13131A] rounded-2xl border border-white/5 p-6 mb-6 relative overflow-hidden ${profileHeroPromoClass(
+          className={`bg-card rounded-2xl border border-border p-6 mb-6 relative overflow-hidden ${profileHeroPromoClass(
             authUser?.curated_highlight as 'frame' | 'featured' | null | undefined,
           )}`}
         >
           <div className="absolute top-0 right-0 w-40 h-40 bg-violet-500/5 rounded-full blur-3xl" />
           <div className="relative flex items-center gap-4 mb-2">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center shadow-lg shadow-violet-500/25 ring-2 ring-violet-500/20 ring-offset-2 ring-offset-[#13131A]">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center shadow-lg shadow-violet-500/25 ring-2 ring-violet-500/20 ring-offset-2 ring-offset-card">
               <User className="w-8 h-8 text-white" />
             </div>
             <div className="flex-1 min-w-0">
               {USE_MOCK_DATA ? (
                 <>
                   <h1 className="text-xl font-bold">Amir</h1>
-                  <p className="text-sm text-slate-500">Tap → Share → Multiply</p>
+                  <p className="text-sm text-muted-foreground">Tap → Share → Multiply</p>
                 </>
               ) : editingName ? (
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -343,7 +380,7 @@ export default function Profile() {
                     onChange={(e) => setNameDraft(e.target.value)}
                     placeholder="Display name"
                     maxLength={120}
-                    className="bg-white/5 border-white/10 text-white h-10"
+                    className="h-10 border-border bg-muted/60 text-foreground"
                     autoFocus
                   />
                   <div className="flex gap-1 shrink-0">
@@ -376,7 +413,7 @@ export default function Profile() {
                         setEditingName(false);
                         setNameDraft(user?.name || '');
                       }}
-                      className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all"
+                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-muted/50 text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
                       aria-label="Cancel"
                     >
                       <X className="w-4 h-4" />
@@ -398,7 +435,7 @@ export default function Profile() {
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-slate-500">Tap → Share → Multiply</p>
+                  <p className="text-sm text-muted-foreground">Tap → Share → Multiply</p>
                 </>
               )}
             </div>
@@ -409,7 +446,7 @@ export default function Profile() {
                   setNameDraft(user?.name || '');
                   setEditingName(true);
                 }}
-                className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:border-white/20 transition-all shrink-0"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/50 text-muted-foreground transition-all hover:border-border hover:bg-muted hover:text-foreground"
                 aria-label="Edit display name"
               >
                 <Pencil className="w-4 h-4" />
@@ -418,26 +455,153 @@ export default function Profile() {
           </div>
         </div>
 
-        {!USE_MOCK_DATA && friendCount !== null && (
-          <Link
-            to="/friends"
-            className="flex items-center justify-between gap-3 rounded-2xl border border-sky-500/20 bg-sky-500/5 px-4 py-3 mb-6 hover:border-sky-500/35 transition-colors"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/25 flex items-center justify-center shrink-0">
-                <HeartHandshake className="w-5 h-5 text-sky-300" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-white">Friends on Dolli</p>
-                <p className="text-xs text-slate-500 truncate">Mutual follows — same list as Explore → Friends.</p>
+        {followStats && (
+          <section className="mb-6 space-y-5" aria-label="Your network on Dolli">
+            <div className="rounded-2xl border border-border bg-card p-1">
+              <div className="grid grid-cols-3 divide-x divide-border">
+                <div
+                  className="px-2 py-4 text-center"
+                  title="Accounts that follow you on Dolli — they may see your public fundraisers in their feeds."
+                >
+                  <Users className="mx-auto mb-1 h-4 w-4 text-muted-foreground" aria-hidden />
+                  <p className="text-2xl font-bold tabular-nums text-foreground">
+                    {followStats.follower_count.toLocaleString()}
+                  </p>
+                  <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Followers
+                  </p>
+                </div>
+                <a
+                  href="#people-you-follow"
+                  className="block px-2 py-4 text-center transition-colors hover:bg-muted/50"
+                  title="People and organizations you follow"
+                >
+                  <UserPlus className="mx-auto mb-1 h-4 w-4 text-violet-400" aria-hidden />
+                  <p className="text-2xl font-bold tabular-nums text-violet-200">
+                    {followStats.following_count.toLocaleString()}
+                  </p>
+                  <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Following
+                  </p>
+                </a>
+                <Link
+                  to="/friends"
+                  className="block px-2 py-4 text-center transition-colors hover:bg-muted/50"
+                  title="Mutual follows — you follow each other"
+                >
+                  <HeartHandshake className="mx-auto mb-1 h-4 w-4 text-sky-400" aria-hidden />
+                  <p className="text-2xl font-bold tabular-nums text-sky-200">
+                    {followStats.mutual_friend_count.toLocaleString()}
+                  </p>
+                  <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Friends</p>
+                </Link>
               </div>
             </div>
-            <span className="text-lg font-bold text-sky-200 tabular-nums shrink-0">{friendCount}</span>
-          </Link>
+
+            <div>
+              <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Your feeds</h2>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Link
+                  to="/explore?view=creators"
+                  className="group rounded-2xl border border-border bg-gradient-to-br from-violet-500/10 to-card p-4 transition-all hover:border-violet-500/35"
+                >
+                  <Megaphone className="mb-2 h-5 w-5 text-violet-300" aria-hidden />
+                  <p className="font-semibold text-foreground">Their fundraisers</p>
+                  <p className="mt-1 text-xs leading-snug text-muted-foreground group-hover:text-muted-foreground">
+                    Live campaigns from organizers you follow.
+                  </p>
+                </Link>
+                <Link
+                  to="/explore?view=network"
+                  className="group rounded-2xl border border-border bg-gradient-to-br from-pink-500/10 to-card p-4 transition-all hover:border-pink-500/35"
+                >
+                  <Share2 className="mb-2 h-5 w-5 text-pink-300" aria-hidden />
+                  <p className="font-semibold text-foreground">Network activity</p>
+                  <p className="mt-1 text-xs leading-snug text-muted-foreground group-hover:text-muted-foreground">
+                    Donations and shares from people you follow.
+                  </p>
+                </Link>
+                <Link
+                  to="/explore?view=friends"
+                  className="group rounded-2xl border border-border bg-gradient-to-br from-sky-500/10 to-card p-4 transition-all hover:border-sky-500/35"
+                >
+                  <HeartHandshake className="mb-2 h-5 w-5 text-sky-300" aria-hidden />
+                  <p className="font-semibold text-foreground">Friends only</p>
+                  <p className="mt-1 text-xs leading-snug text-muted-foreground group-hover:text-muted-foreground">
+                    The same signals, filtered to mutual follows.
+                  </p>
+                </Link>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+                <Link to="/explore?view=creators&friends_only=1" className="text-violet-400 hover:text-violet-300">
+                  Friends’ fundraisers only →
+                </Link>
+                <Link to="/notifications" className="text-muted-foreground hover:text-muted-foreground">
+                  Notification inbox →
+                </Link>
+              </div>
+            </div>
+
+            <div id="people-you-follow" className="scroll-mt-24 rounded-2xl border border-border bg-card p-4">
+              <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                <h2 className="text-sm font-bold text-foreground">People you follow</h2>
+                <Link
+                  to="/search/users"
+                  className="text-xs font-semibold text-violet-400 hover:text-violet-300"
+                >
+                  Find more →
+                </Link>
+              </div>
+              {followingPeople.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  You’re not following anyone yet. Open a fundraiser and tap{' '}
+                  <span className="text-muted-foreground">Follow</span> on the organizer card, or discover accounts in{' '}
+                  <Link to="/search/users" className="text-violet-400 hover:text-violet-300">
+                    People search
+                  </Link>
+                  .
+                </p>
+              ) : (
+                <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {followingPeople.map((p) => (
+                    <Link
+                      key={p.user_id}
+                      to={`/search/users?q=${encodeURIComponent(p.name?.trim() || p.user_id)}`}
+                      className="shrink-0 rounded-full border border-border bg-muted/50 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-violet-500/30 hover:bg-violet-500/10 hover:text-violet-900 dark:hover:text-white"
+                    >
+                      {p.name?.trim() || 'Member'}
+                    </Link>
+                  ))}
+                </div>
+              )}
+
+              {friendsPeople.length > 0 ? (
+                <div className="mt-5 border-t border-border pt-4">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-sky-500/90">Friends</h3>
+                    <Link to="/friends" className="text-xs font-semibold text-sky-400 hover:text-sky-300">
+                      Open list →
+                    </Link>
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    {friendsPeople.map((p) => (
+                      <Link
+                        key={p.user_id}
+                        to={`/search/users?q=${encodeURIComponent(p.name?.trim() || p.user_id)}`}
+                        className="shrink-0 rounded-full border border-sky-500/25 bg-sky-500/10 px-3 py-1.5 text-xs font-medium text-sky-100 transition-colors hover:border-sky-400/40 hover:bg-sky-500/15"
+                      >
+                        {p.name?.trim() || 'Friend'}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
         )}
 
         {!USE_MOCK_DATA && earlyDonor?.milestone != null && earlyDonor.rank != null && (
-          <div className="mb-6 rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-500/10 via-[#13131A] to-violet-600/10 p-5 sm:p-6">
+          <div className="mb-6 rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-500/10 via-card to-violet-600/10 p-5 sm:p-6">
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
                 <Trophy className="w-6 h-6 text-amber-300" />
@@ -446,23 +610,23 @@ export default function Profile() {
                 <p className="text-[10px] font-bold uppercase tracking-widest text-amber-200/80 mb-1">
                   Platform milestone
                 </p>
-                <h2 className="text-lg sm:text-xl font-bold text-white leading-snug">
+                <h2 className="text-lg sm:text-xl font-bold text-foreground leading-snug">
                   Among the first {earlyDonor.milestone.toLocaleString()} donors on Dolli
                 </h2>
-                <p className="text-sm text-slate-400 mt-2">
+                <p className="text-sm text-muted-foreground mt-2">
                   Your place by first completed gift:{' '}
-                  <span className="text-white font-semibold">#{earlyDonor.rank}</span>
+                  <span className="font-semibold text-foreground">#{earlyDonor.rank}</span>
                   {earlyDonor.total_distinct_donors > 0 ? (
                     <>
                       {' '}
-                      <span className="text-slate-500">
+                      <span className="text-muted-foreground">
                         · {earlyDonor.total_distinct_donors.toLocaleString()} donor
                         {earlyDonor.total_distinct_donors === 1 ? '' : 's'} on the platform so far
                       </span>
                     </>
                   ) : null}
                 </p>
-                <p className="text-[11px] text-slate-500 mt-3 leading-relaxed">
+                <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
                   Rankings use the time of each account’s first successful donation. Tiers unlock at 100, 1,000, and
                   10,000 — a permanent thank-you as the community grows.
                 </p>
@@ -472,11 +636,11 @@ export default function Profile() {
         )}
 
         {!USE_MOCK_DATA && (
-          <div className="bg-[#13131A] rounded-2xl border border-white/5 p-5 mb-6">
+          <div className="bg-card rounded-2xl border border-border p-5 mb-6">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-white">NSFW filter</p>
-                <p className="text-xs text-slate-500 mt-1 max-w-[240px]">
+                <p className="text-sm font-semibold text-foreground">NSFW filter</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-[240px]">
                   When on, mature or sensitive fundraisers stay out of Explore and home, and campaign pages stay
                   blurred until you turn this off.
                 </p>
@@ -508,45 +672,45 @@ export default function Profile() {
 
         {/* Impact Metrics Grid */}
         <div className="grid grid-cols-2 gap-3 mb-6">
-          <div className="bg-[#13131A] rounded-2xl border border-white/5 p-4 text-center">
+          <div className="bg-card rounded-2xl border border-border p-4 text-center">
             <Heart className="w-5 h-5 text-pink-400 mx-auto mb-1.5" />
             <div className="text-2xl font-bold text-emerald-400">${totalDonated}</div>
-            <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Total Donated</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">Total Donated</div>
           </div>
-          <div className="bg-[#13131A] rounded-2xl border border-white/5 p-4 text-center">
+          <div className="bg-card rounded-2xl border border-border p-4 text-center">
             <Sparkles className="w-5 h-5 text-violet-400 mx-auto mb-1.5" />
-            <div className="text-2xl font-bold text-white">{campaigns.length}</div>
-            <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Campaigns Created</div>
+            <div className="text-2xl font-bold text-foreground">{campaigns.length}</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">Campaigns Created</div>
           </div>
-          <div className="bg-[#13131A] rounded-2xl border border-white/5 p-4 text-center">
+          <div className="bg-card rounded-2xl border border-border p-4 text-center">
             <Users className="w-5 h-5 text-blue-400 mx-auto mb-1.5" />
-            <div className="text-2xl font-bold text-white">{totalReferralDonations}</div>
-            <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">People Referred</div>
+            <div className="text-2xl font-bold text-foreground">{totalReferralDonations}</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">People Referred</div>
           </div>
-          <div className="bg-[#13131A] rounded-2xl border border-white/5 p-4 text-center">
+          <div className="bg-card rounded-2xl border border-border p-4 text-center">
             <TrendingUp className="w-5 h-5 text-emerald-400 mx-auto mb-1.5" />
             <div className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-violet-400 bg-clip-text text-transparent">${impactMultiplied}</div>
-            <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Impact Multiplied</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">Impact Multiplied</div>
           </div>
         </div>
 
         {!USE_MOCK_DATA && campaigns.length > 0 && (
-          <div className="bg-[#13131A] rounded-2xl border border-white/5 p-5 mb-6">
-            <h2 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
+          <div className="bg-card rounded-2xl border border-border p-5 mb-6">
+            <h2 className="text-sm font-bold text-foreground mb-1 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-violet-400" />
               Your campaigns
             </h2>
-            <p className="text-xs text-slate-500 mb-4">
+            <p className="text-xs text-muted-foreground mb-4">
               Until the first completed donation, you can move a live campaign back to drafts or delete it.
             </p>
             <div className="space-y-4">
               {campaigns.map((c) => (
                 <div
                   key={c.id}
-                  className="rounded-xl border border-white/5 bg-white/[0.02] p-3.5 space-y-2"
+                  className="space-y-2 rounded-xl border border-border bg-muted/40 p-3.5"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       {(c.status || 'active').toLowerCase() === 'draft' ? 'Draft' : c.status === 'active' ? 'Live' : c.status}
                     </span>
                   </div>
@@ -568,22 +732,22 @@ export default function Profile() {
         )}
 
         {/* Achievements - Streak + Badges */}
-        <div className="bg-[#13131A] rounded-2xl border border-white/5 p-5 mb-6">
+        <div className="bg-card rounded-2xl border border-border p-5 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
               <Trophy className="w-4 h-4 text-amber-400" />
               Achievements
             </h2>
-            <span className="text-xs text-slate-500">{earnedBadgeNames.length} earned</span>
+            <span className="text-xs text-muted-foreground">{earnedBadgeNames.length} earned</span>
           </div>
 
           {/* Donation Streak */}
-          <div className="bg-white/5 rounded-xl p-3 mb-4">
+          <div className="mb-4 rounded-xl bg-muted/50 p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-orange-400 flex items-center gap-1">
                 <Flame className="w-3.5 h-3.5" /> Donation Streak
               </span>
-              <span className="text-xs font-bold text-white">{streak} days</span>
+              <span className="text-xs font-bold text-foreground">{streak} days</span>
             </div>
             <div className="flex gap-1">
               {[1, 2, 3, 4, 5, 6, 7].map((day) => (
@@ -592,7 +756,7 @@ export default function Profile() {
                   className={`flex-1 h-2 rounded-full transition-all ${
                     day <= streak
                       ? 'bg-gradient-to-r from-orange-400 to-amber-500 shadow-sm shadow-orange-500/30'
-                      : 'bg-white/5'
+                      : 'bg-muted/40'
                   }`}
                 />
               ))}
@@ -609,11 +773,11 @@ export default function Profile() {
                   className={`rounded-xl p-2.5 text-center transition-all ${
                     earned
                       ? 'bg-gradient-to-br from-violet-500/10 to-pink-500/10 border border-violet-500/20'
-                      : 'bg-white/[0.02] border border-white/5 opacity-30'
+                      : 'border border-border bg-muted/30 opacity-30'
                   }`}
                 >
                   <div className="text-xl mb-0.5">{badge.icon}</div>
-                  <div className="text-[9px] font-semibold text-slate-300 leading-tight line-clamp-1">{badge.name}</div>
+                  <div className="text-[9px] font-semibold text-muted-foreground leading-tight line-clamp-1">{badge.name}</div>
                 </div>
               );
             })}
@@ -621,9 +785,9 @@ export default function Profile() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-4 bg-[#13131A] rounded-xl p-1 border border-white/5">
+        <div className="flex gap-1 mb-4 bg-card rounded-xl p-1 border border-border">
           {[
-            { key: 'activity' as const, label: 'Activity', icon: Zap },
+            { key: 'activity' as const, label: 'My feed', icon: Zap },
             { key: 'badges' as const, label: 'All Badges', icon: Trophy },
             { key: 'referrals' as const, label: 'Referrals', icon: Share2 },
           ].map((tab) => (
@@ -633,7 +797,7 @@ export default function Profile() {
               className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
                 activeTab === tab.key
                   ? 'bg-violet-500/20 text-violet-300'
-                  : 'text-slate-500 hover:text-slate-300'
+                  : 'text-muted-foreground hover:text-muted-foreground'
               }`}
             >
               <tab.icon className="w-3.5 h-3.5" />
@@ -646,13 +810,22 @@ export default function Profile() {
         {activeTab === 'activity' && (
           <div className="space-y-2">
             {activityFeed.length === 0 ? (
-              <div className="text-center py-12 bg-[#13131A] rounded-2xl border border-white/5">
+              <div className="text-center py-12 bg-card rounded-2xl border border-border">
                 <Zap className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-                <h3 className="text-base font-bold mb-2">No activity yet</h3>
-                <p className="text-sm text-slate-400 mb-4">Start giving to build your impact story</p>
+                <h3 className="text-base font-bold mb-2">No personal activity yet</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Donations, campaigns you create, and referrals show up here — your private timeline on Dolli.
+                </p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  For community-wide updates, use <strong className="text-muted-foreground">Your feeds</strong> above or open{' '}
+                  <Link to="/explore?view=network" className="text-violet-400 hover:text-violet-300">
+                    Network activity
+                  </Link>
+                  .
+                </p>
                 <Link to="/explore">
-                  <Button className="bg-violet-600 hover:bg-violet-500 text-white border-0 rounded-xl">
-                    Explore Campaigns
+                  <Button className="rounded-xl border-0 bg-violet-600 text-white hover:bg-violet-500">
+                    Explore campaigns
                   </Button>
                 </Link>
               </div>
@@ -665,13 +838,13 @@ export default function Profile() {
                   referral: 'bg-blue-500/10 text-blue-400',
                 };
                 return (
-                  <div key={idx} className="bg-[#13131A] rounded-xl border border-white/5 p-3.5 flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${colorMap[item.type] || 'bg-white/5 text-slate-400'}`}>
+                  <div key={idx} className="bg-card rounded-xl border border-border p-3.5 flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${colorMap[item.type] || 'bg-white/5 text-muted-foreground'}`}>
                       <IconComp className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-sm text-white truncate">{item.label}</div>
-                      <div className="text-xs text-slate-500 truncate">{item.detail}</div>
+                      <div className="truncate text-sm font-semibold text-foreground">{item.label}</div>
+                      <div className="text-xs text-muted-foreground truncate">{item.detail}</div>
                     </div>
                     {item.date && (
                       <div className="text-[10px] text-slate-600 flex-shrink-0">
@@ -697,12 +870,12 @@ export default function Profile() {
                   className={`rounded-2xl border p-4 text-center transition-all ${
                     earned
                       ? `bg-gradient-to-br ${tierClass} bg-opacity-10`
-                      : 'bg-[#13131A] border-white/5 opacity-30'
+                      : 'bg-card border-border opacity-30'
                   }`}
                 >
                   <div className="text-3xl mb-2">{badge.icon}</div>
                   <div className="font-bold text-sm mb-1">{badge.name}</div>
-                  <div className="text-[10px] text-slate-400 leading-tight">{badge.description}</div>
+                  <div className="text-[10px] text-muted-foreground leading-tight">{badge.description}</div>
                   {earned && (
                     <div className="mt-2 text-[10px] font-semibold text-emerald-400 flex items-center justify-center gap-1">
                       <CheckCircle2 className="w-3 h-3" /> Earned
@@ -718,15 +891,15 @@ export default function Profile() {
         {activeTab === 'referrals' && (
           <div className="space-y-3">
             {/* Referral Link */}
-            <div className="bg-[#13131A] rounded-2xl border border-violet-500/20 p-5 relative overflow-hidden">
+            <div className="bg-card rounded-2xl border border-violet-500/20 p-5 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl" />
               <div className="relative">
                 <div className="flex items-center gap-2 mb-3">
                   <Gift className="w-4 h-4 text-violet-400" />
-                  <span className="text-sm font-semibold text-white">Your Referral Link</span>
+                  <span className="text-sm font-semibold text-foreground">Your Referral Link</span>
                 </div>
                 <div className="flex gap-2 mb-4">
-                  <div className="flex-1 bg-white/5 rounded-xl px-3 py-2.5 text-xs text-slate-400 truncate border border-white/5">
+                  <div className="flex-1 truncate rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground">
                     {USE_MOCK_DATA ? 'dolli.app/u/amir?ref=123' : `${window.location.origin}/?ref=${user?.id?.slice(0, 8) || 'dolli'}`}
                   </div>
                   <button
@@ -738,20 +911,20 @@ export default function Profile() {
                 </div>
 
                 {/* Impact Multiplier Visualization */}
-                <div className="bg-white/5 rounded-xl p-3 mb-4">
+                <div className="mb-4 rounded-xl bg-muted/50 p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-violet-300">Impact Multiplier</span>
                     <span className="text-xs font-bold text-emerald-400">
                       {totalDonated > 0 ? `${((impactMultiplied / totalDonated) || 1).toFixed(1)}x` : '1.0x'}
                     </span>
                   </div>
-                  <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-full rounded-full bg-gradient-to-r from-violet-500 via-pink-500 to-emerald-500 transition-all duration-1000"
                       style={{ width: `${Math.min(((impactMultiplied / Math.max(totalDonated, 1)) / 10) * 100, 100)}%` }}
                     />
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-1.5">
+                  <p className="text-[10px] text-muted-foreground mt-1.5">
                     Your ${totalDonated} turned into ${impactMultiplied} through referrals
                   </p>
                 </div>
@@ -760,7 +933,7 @@ export default function Profile() {
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => handleShareImpact('tiktok')}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-black border border-white/10 text-white text-xs font-medium hover:bg-white/5 transition-all"
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-slate-900 px-3 py-2.5 text-xs font-medium text-white transition-all hover:bg-slate-800 dark:bg-black dark:hover:bg-white/10"
                   >
                     {TIKTOK_ICON}
                     TikTok
@@ -774,7 +947,7 @@ export default function Profile() {
                   </button>
                   <button
                     onClick={() => handleShareImpact('twitter')}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-black border border-white/10 text-white text-xs font-medium hover:bg-white/5 transition-all"
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-slate-900 px-3 py-2.5 text-xs font-medium text-white transition-all hover:bg-slate-800 dark:bg-black dark:hover:bg-white/10"
                   >
                     <Share2 className="w-4 h-4" />
                     X
@@ -786,33 +959,33 @@ export default function Profile() {
             {/* Referral Stats */}
             {referrals.length > 0 && (
               <>
-                <div className="bg-[#13131A] rounded-xl border border-white/5 p-4 grid grid-cols-3 gap-4 text-center">
+                <div className="bg-card rounded-xl border border-border p-4 grid grid-cols-3 gap-4 text-center">
                   <div>
                     <div className="text-lg font-bold text-blue-400">{totalClicks}</div>
-                    <div className="text-[10px] text-slate-500">Clicks</div>
+                    <div className="text-[10px] text-muted-foreground">Clicks</div>
                   </div>
                   <div>
                     <div className="text-lg font-bold text-violet-400">{totalReferralDonations}</div>
-                    <div className="text-[10px] text-slate-500">Conversions</div>
+                    <div className="text-[10px] text-muted-foreground">Conversions</div>
                   </div>
                   <div>
                     <div className="text-lg font-bold text-emerald-400">${totalReferralAmount}</div>
-                    <div className="text-[10px] text-slate-500">Impact</div>
+                    <div className="text-[10px] text-muted-foreground">Impact</div>
                   </div>
                 </div>
                 {referrals.map((r) => (
-                  <div key={r.id} className="bg-[#13131A] rounded-xl border border-white/5 p-3.5 flex items-center justify-between">
+                  <div key={r.id} className="bg-card rounded-xl border border-border p-3.5 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center">
                         <Share2 className="w-4 h-4 text-blue-400" />
                       </div>
                       <div>
                         <div className="font-semibold text-sm capitalize">{r.platform}</div>
-                        <div className="text-xs text-slate-500">Campaign #{r.campaign_id}</div>
+                        <div className="text-xs text-muted-foreground">Campaign #{r.campaign_id}</div>
                       </div>
                     </div>
                     <div className="text-right text-xs">
-                      <div className="text-slate-400">{r.clicks} clicks</div>
+                      <div className="text-muted-foreground">{r.clicks} clicks</div>
                       <div className="text-emerald-400 font-semibold">{r.donations_count} donations</div>
                     </div>
                   </div>
@@ -821,10 +994,10 @@ export default function Profile() {
             )}
 
             {referrals.length === 0 && (
-              <div className="text-center py-8 bg-[#13131A] rounded-2xl border border-white/5">
+              <div className="text-center py-8 bg-card rounded-2xl border border-border">
                 <Share2 className="w-10 h-10 text-slate-600 mx-auto mb-3" />
                 <h3 className="text-base font-bold mb-2">No referrals yet</h3>
-                <p className="text-sm text-slate-400 mb-4">Share your link above to start multiplying impact</p>
+                <p className="text-sm text-muted-foreground mb-4">Share your link above to start multiplying impact</p>
               </div>
             )}
 
@@ -838,7 +1011,7 @@ export default function Profile() {
             </Button>
           </div>
         )}
-      </div>
+      </main>
       <SiteFooter />
     </div>
   );

@@ -353,105 +353,133 @@ export default function CreateCampaign() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <div className="min-h-screen bg-background text-foreground">
         <Header />
-        <div className="pt-24 flex items-center justify-center">
-          <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex items-center justify-center pt-24 outline-none"
+        >
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
+        </main>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <div className="min-h-screen bg-background text-foreground">
         <Header />
-        <div className="pt-24 text-center max-w-md mx-auto px-4">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto max-w-md px-4 pt-24 text-center outline-none"
+        >
           <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center mx-auto mb-6">
             <User className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-2xl font-bold mb-3">Sign in to create a campaign</h2>
-          <p className="text-slate-400 mb-6">Start your fundraising journey on Dolli.</p>
+          <p className="text-muted-foreground mb-6">Start your fundraising journey on Dolli.</p>
           <Button
             onClick={login}
             className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold px-8 py-6 rounded-2xl shadow-2xl shadow-violet-500/25 border-0"
           >
             Sign In
           </Button>
-        </div>
+        </main>
       </div>
     );
   }
 
   if (isEditMode && (editCampaignId == null || !Number.isFinite(editCampaignId))) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <div className="min-h-screen bg-background text-foreground">
         <Header />
-        <div className="pt-24 text-center max-w-md mx-auto px-4">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto max-w-md px-4 pt-24 text-center outline-none"
+        >
           <h2 className="text-xl font-bold mb-3">Invalid link</h2>
-          <p className="text-slate-400 mb-6">This edit URL is not valid.</p>
+          <p className="text-muted-foreground mb-6">This edit URL is not valid.</p>
           <Link to="/profile" className="text-violet-400 hover:text-violet-300">
             Back to profile
           </Link>
-        </div>
+        </main>
       </div>
     );
   }
 
   if (isEditMode && editBootstrapping) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <div className="min-h-screen bg-background text-foreground">
         <Header />
-        <div className="pt-24 flex items-center justify-center">
-          <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex items-center justify-center pt-24 outline-none"
+        >
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
+        </main>
       </div>
     );
   }
 
   if (isEditMode && editError) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <div className="min-h-screen bg-background text-foreground">
         <Header />
-        <div className="pt-24 text-center max-w-md mx-auto px-4">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto max-w-md px-4 pt-24 text-center outline-none"
+        >
           <h2 className="text-xl font-bold mb-3">Can’t open editor</h2>
-          <p className="text-slate-400 mb-6">{editError}</p>
+          <p className="text-muted-foreground mb-6">{editError}</p>
           <Link
             to="/profile"
             className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-violet-600 text-white font-semibold hover:bg-violet-500"
           >
             Back to profile
           </Link>
-        </div>
+        </main>
       </div>
     );
   }
 
   if (!isEditMode && (eligibilityLoading || !eligibility)) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <div className="min-h-screen bg-background text-foreground">
         <Header />
-        <div className="pt-24 flex items-center justify-center">
-          <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex items-center justify-center pt-24 outline-none"
+        >
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
+        </main>
       </div>
     );
   }
 
   if (!isEditMode && !eligibility.can_create) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <div className="min-h-screen bg-background text-foreground">
         <Header />
-        <div className="pt-24 max-w-lg mx-auto px-4 text-center">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto max-w-lg px-4 pt-24 text-center outline-none"
+        >
           <div className="w-20 h-20 rounded-full bg-gradient-to-br from-amber-500/30 to-rose-500/30 flex items-center justify-center mx-auto mb-6 border border-amber-500/20">
             <Heart className="w-10 h-10 text-amber-300" />
           </div>
           <h2 className="text-2xl font-bold mb-3">Give first, then create</h2>
-          <p className="text-slate-400 mb-2">
+          <p className="text-muted-foreground mb-2">
             {eligibility.message ||
               'Dolli asks you to complete at least one donation before starting your own fundraiser — so the community stays give-first.'}
           </p>
-          <p className="text-sm text-slate-500 mb-8">
+          <p className="text-sm text-muted-foreground mb-8">
             Paid donations on your account:{' '}
             <span className="text-white font-semibold">{eligibility.paid_donations_count}</span>
           </p>
@@ -464,7 +492,7 @@ export default function CreateCampaign() {
           <p className="text-xs text-slate-600 mt-6">
             Admins and dev bypass are exempt. Questions? Contact the team.
           </p>
-        </div>
+        </main>
       </div>
     );
   }
@@ -568,21 +596,25 @@ export default function CreateCampaign() {
     aiStatus != null && (!aiStatus.enabled || !aiStatus.hub_configured);
 
   return (
-    <div className="min-h-screen bg-[#0A0A0F] text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <Header />
 
-      <div className="pt-20 max-w-2xl mx-auto px-4 sm:px-6 pb-16">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto max-w-2xl px-4 pb-16 pt-20 outline-none sm:px-6"
+      >
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <button
             onClick={() => navigate(-1)}
-            className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:border-white/20 transition-all"
+            className="w-10 h-10 rounded-xl bg-white/5 border border-border flex items-center justify-center text-muted-foreground hover:text-white hover:border-border transition-all"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
             <h1 className="text-2xl font-bold">{isEditMode ? 'Edit draft' : 'Create Campaign'}</h1>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted-foreground">
               {isEditMode
                 ? 'Update copy and media while this fundraiser is still a draft. Publish when you’re ready.'
                 : 'Lead with emotion — photo, GIF, or short video hooks donors on TikTok & Instagram.'}
@@ -607,7 +639,7 @@ export default function CreateCampaign() {
                   'rounded-full px-3 py-1.5 text-xs font-semibold border transition-colors',
                   createStep === n
                     ? 'border-violet-500/60 bg-violet-500/20 text-white'
-                    : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20',
+                    : 'border-border bg-white/5 text-muted-foreground hover:border-border',
                 )}
               >
                 {n}. {label}
@@ -626,7 +658,7 @@ export default function CreateCampaign() {
 
         <div
           className={cn(
-            'bg-[#13131A] rounded-2xl border border-violet-500/20 p-5 mb-6 relative overflow-hidden',
+            'bg-card rounded-2xl border border-violet-500/20 p-5 mb-6 relative overflow-hidden',
             (isEditMode || createStep > 1) && 'hidden',
           )}
         >
@@ -638,7 +670,7 @@ export default function CreateCampaign() {
               </div>
               <span className="text-sm font-semibold text-violet-300">Step 1 — Describe your cause</span>
             </div>
-            <p className="text-xs text-slate-500 mb-2">
+            <p className="text-xs text-muted-foreground mb-2">
               We’ll draft title, goal, and story. You’ll edit next — or skip and write by hand.
             </p>
             <Textarea
@@ -646,7 +678,7 @@ export default function CreateCampaign() {
               onChange={(e) => setAiPrompt(e.target.value)}
               placeholder="Describe your cause in a few words… e.g., 'Help rescue stray dogs in downtown shelters'"
               rows={3}
-              className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl resize-none mb-3"
+              className="bg-white/5 border-border text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl resize-none mb-3"
             />
             <div className="flex flex-col sm:flex-row gap-2">
               <Button
@@ -670,7 +702,7 @@ export default function CreateCampaign() {
                 type="button"
                 variant="outline"
                 onClick={() => setCreateStep(2)}
-                className="sm:w-44 border-white/15 bg-white/5 text-white hover:bg-white/10"
+                className="sm:w-44 border-border bg-white/5 text-white hover:bg-white/10"
               >
                 Skip — manual
               </Button>
@@ -679,7 +711,7 @@ export default function CreateCampaign() {
         </div>
 
         {/* Core fields */}
-        <div className={cn('bg-[#13131A] rounded-2xl border border-white/5 p-5 space-y-5 mb-6', !showCore && 'hidden')}>
+        <div className={cn('bg-card rounded-2xl border border-border p-5 space-y-5 mb-6', !showCore && 'hidden')}>
           {/* Title */}
           <div>
             <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
@@ -707,7 +739,7 @@ export default function CreateCampaign() {
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               placeholder="e.g., Plant 1000 Trees Together"
               maxLength={60}
-              className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl h-12"
+              className="bg-white/5 border-border text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl h-12"
             />
             <div className="text-right text-xs text-slate-600 mt-1">{form.title.length}/60</div>
           </div>
@@ -724,7 +756,7 @@ export default function CreateCampaign() {
                   className={`flex flex-col items-center gap-1 px-3 py-3 rounded-xl text-xs font-medium transition-all ${
                     form.category === cat.value
                       ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30 shadow-lg shadow-violet-500/10'
-                      : 'bg-white/5 text-slate-400 border border-white/5 hover:border-white/10'
+                      : 'bg-white/5 text-muted-foreground border border-border hover:border-border'
                   }`}
                 >
                   <span className="text-lg">{cat.emoji}</span>
@@ -761,7 +793,7 @@ export default function CreateCampaign() {
               onChange={(e) => setForm({ ...form, description: e.target.value.slice(0, 200) })}
               placeholder="Tell people about your cause..."
               rows={3}
-              className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl resize-none"
+              className="bg-white/5 border-border text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl resize-none"
             />
             <div className="text-right text-xs text-slate-600 mt-1">{form.description.length}/200</div>
           </div>
@@ -779,7 +811,7 @@ export default function CreateCampaign() {
                 max={100000}
                 value={form.goal_amount}
                 onChange={(e) => setForm({ ...form, goal_amount: Number(e.target.value) })}
-                className="bg-white/5 border-white/10 text-white focus:border-violet-500/50 rounded-xl h-12"
+                className="bg-white/5 border-border text-white focus:border-violet-500/50 rounded-xl h-12"
               />
             </div>
             <div>
@@ -791,15 +823,15 @@ export default function CreateCampaign() {
                 <select
                   value={form.duration}
                   onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })}
-                  className="w-full h-12 bg-white/5 border border-white/10 text-white rounded-xl px-3 appearance-none focus:border-violet-500/50 focus:outline-none"
+                  className="w-full h-12 bg-white/5 border border-border text-white rounded-xl px-3 appearance-none focus:border-violet-500/50 focus:outline-none"
                 >
                   {durations.map((d) => (
-                    <option key={d.value} value={d.value} className="bg-[#13131A] text-white">
+                    <option key={d.value} value={d.value} className="bg-card text-white">
                       {d.label}
                     </option>
                   ))}
                 </select>
-                <Clock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                <Clock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               </div>
             </div>
           </div>
@@ -808,7 +840,7 @@ export default function CreateCampaign() {
             <Button
               type="button"
               onClick={() => setCreateStep(3)}
-              className="w-full mb-2 bg-white/10 border border-white/15 text-white hover:bg-white/15"
+              className="w-full mb-2 bg-white/10 border border-border text-white hover:bg-white/15"
             >
               Continue to media & launch →
             </Button>
@@ -823,10 +855,10 @@ export default function CreateCampaign() {
               <Film className="w-4 h-4" />
               <span className="text-sm font-semibold">Visual story</span>
             </div>
-            <p className="text-xs text-slate-500">
-              Strong cover art drives shares. Use a <span className="text-slate-400">direct HTTPS image URL</span>{' '}
+            <p className="text-xs text-muted-foreground">
+              Strong cover art drives shares. Use a <span className="text-muted-foreground">direct HTTPS image URL</span>{' '}
               (the link should open only the picture — e.g. Unsplash, Imgur “direct link”, or Google Drive{' '}
-              <code className="text-slate-400">…/uc?export=view&amp;id=…</code>
+              <code className="text-muted-foreground">…/uc?export=view&amp;id=…</code>
               ). Normal “share” Drive links are a web page, not an image — we rewrite common Drive formats on blur.
             </p>
             <p className="text-xs text-amber-200/80">
@@ -849,7 +881,7 @@ export default function CreateCampaign() {
                     if (n !== form.image_url) setForm((p) => ({ ...p, image_url: n }));
                   }}
                   placeholder="https://…jpg or png — fallback poster if you add video"
-                  className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl h-12 flex-1"
+                  className="bg-white/5 border-border text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl h-12 flex-1"
                 />
                 <input
                   ref={coverInputRef}
@@ -862,7 +894,7 @@ export default function CreateCampaign() {
                   type="button"
                   disabled={coverUploading}
                   onClick={() => coverInputRef.current?.click()}
-                  className="h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:border-white/20 transition-all flex items-center gap-2 text-sm disabled:opacity-50"
+                  className="h-12 px-4 rounded-xl bg-white/5 border border-border text-muted-foreground hover:text-white hover:border-border transition-all flex items-center gap-2 text-sm disabled:opacity-50"
                 >
                   <Upload className="w-4 h-4" />
                   {coverUploading ? '…' : ''}
@@ -875,14 +907,14 @@ export default function CreateCampaign() {
                 value={form.gif_url}
                 onChange={(e) => setForm({ ...form, gif_url: e.target.value })}
                 placeholder="Direct .gif URL (e.g. from Giphy → copy image address)"
-                className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl h-12"
+                className="bg-white/5 border-border text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl h-12"
               />
             </div>
             <div>
               <label className="block text-sm font-semibold text-white mb-2">Short video (optional)</label>
-              <p className="text-xs text-slate-500 mb-2">
+              <p className="text-xs text-muted-foreground mb-2">
                 Upload from your phone or paste a link. YouTube and Google Drive “share” links play in an embedded
-                player; a direct <code className="text-slate-400">.mp4</code> / <code className="text-slate-400">.webm</code>{' '}
+                player; a direct <code className="text-muted-foreground">.mp4</code> / <code className="text-muted-foreground">.webm</code>{' '}
                 URL uses the browser video player.
               </p>
               <div className="flex gap-2">
@@ -890,7 +922,7 @@ export default function CreateCampaign() {
                   value={form.video_url}
                   onChange={(e) => setForm({ ...form, video_url: e.target.value })}
                   placeholder="https://… (YouTube, Drive, or direct .mp4)"
-                  className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl h-12 flex-1"
+                  className="bg-white/5 border-border text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl h-12 flex-1"
                 />
                 <input
                   ref={videoInputRef}
@@ -903,7 +935,7 @@ export default function CreateCampaign() {
                   type="button"
                   disabled={videoUploading}
                   onClick={() => videoInputRef.current?.click()}
-                  className="h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:border-white/20 transition-all flex items-center gap-2 text-sm disabled:opacity-50"
+                  className="h-12 px-4 rounded-xl bg-white/5 border border-border text-muted-foreground hover:text-white hover:border-border transition-all flex items-center gap-2 text-sm disabled:opacity-50"
                 >
                   <Upload className="w-4 h-4" />
                   {videoUploading ? '…' : ''}
@@ -913,7 +945,7 @@ export default function CreateCampaign() {
           </div>
 
         {/* Impact Section */}
-        <div className="bg-[#13131A] rounded-2xl border border-emerald-500/20 p-5 mb-6">
+        <div className="bg-card rounded-2xl border border-emerald-500/20 p-5 mb-6">
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
               <Heart className="w-3.5 h-3.5 text-white fill-white" />
@@ -935,28 +967,28 @@ export default function CreateCampaign() {
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-500 mb-2">What will $1 achieve?</p>
+          <p className="text-xs text-muted-foreground mb-2">What will $1 achieve?</p>
           <Input
             value={form.impact_statement}
             onChange={(e) => setForm({ ...form, impact_statement: e.target.value })}
             placeholder="e.g., Plants one tree seedling in a deforested area"
             maxLength={80}
-            className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-emerald-500/50 rounded-xl h-12"
+            className="bg-white/5 border-border text-white placeholder-slate-500 focus:border-emerald-500/50 rounded-xl h-12"
           />
           <div className="text-right text-xs text-slate-600 mt-1">{form.impact_statement.length}/80</div>
         </div>
 
-        <div className="bg-[#13131A] rounded-2xl border border-white/5 p-5 mb-6">
+        <div className="bg-card rounded-2xl border border-border p-5 mb-6">
           <label className="flex items-start gap-3 cursor-pointer">
             <input
               type="checkbox"
               checked={form.is_nsfw}
               onChange={(e) => setForm({ ...form, is_nsfw: e.target.checked })}
-              className="mt-1 rounded border-white/20 bg-white/5 text-violet-500 focus:ring-violet-500/40"
+              className="mt-1 rounded border-border bg-white/5 text-violet-500 focus:ring-violet-500/40"
             />
             <div>
               <span className="text-sm font-semibold text-white">Mature or sensitive content (NSFW)</span>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Mark if this fundraiser includes nudity, graphic medical imagery, violence, or other material that
                 should stay behind the NSFW filter for users who keep it on (default).
               </p>
@@ -968,10 +1000,10 @@ export default function CreateCampaign() {
         {showPreview && (
           <div className="mb-6">
             <div className="flex items-center gap-2 mb-3">
-              <Eye className="w-4 h-4 text-slate-400" />
-              <span className="text-sm font-semibold text-slate-300">Live Preview</span>
+              <Eye className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-semibold text-muted-foreground">Live Preview</span>
             </div>
-            <div className="bg-[#13131A] rounded-2xl border border-white/5 overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border overflow-hidden">
               <div className="relative h-40 overflow-hidden bg-black">
                 <CampaignHeroMedia
                   className="w-full h-full"
@@ -983,7 +1015,7 @@ export default function CreateCampaign() {
                   }
                   title="Preview"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#13131A] via-transparent to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent pointer-events-none" />
                 {selectedCategory && (
                   <div className="absolute top-3 left-3">
                     <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-gradient-to-r ${selectedCategory.gradient} text-white`}>
@@ -996,13 +1028,13 @@ export default function CreateCampaign() {
                 <h3 className="text-base font-bold text-white mb-1 line-clamp-1">
                   {form.title || 'Your Campaign Title'}
                 </h3>
-                <p className="text-xs text-slate-400 mb-3 line-clamp-2">
+                <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
                   {form.description || 'Your campaign description will appear here...'}
                 </p>
                 <div className="mb-2">
                   <div className="flex justify-between text-xs mb-1">
                     <span className="font-bold text-emerald-400">$0</span>
-                    <span className="text-slate-500">of ${form.goal_amount.toLocaleString()}</span>
+                    <span className="text-muted-foreground">of ${form.goal_amount.toLocaleString()}</span>
                   </div>
                   <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
                     <div
@@ -1011,7 +1043,7 @@ export default function CreateCampaign() {
                     />
                   </div>
                 </div>
-                <div className="flex items-center justify-between text-[10px] text-slate-500">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Users className="w-3 h-3" /> 0 donors
                   </span>
@@ -1021,7 +1053,7 @@ export default function CreateCampaign() {
                   <span className="font-semibold text-violet-400">0%</span>
                 </div>
                 {form.impact_statement && (
-                  <div className="mt-3 pt-3 border-t border-white/5">
+                  <div className="mt-3 pt-3 border-t border-border">
                     <p className="text-[10px] text-emerald-400 flex items-center gap-1">
                       <Heart className="w-3 h-3 fill-emerald-400" />
                       $1 = {form.impact_statement}
@@ -1056,13 +1088,13 @@ export default function CreateCampaign() {
             onClick={() => handleSubmit(true)}
             disabled={submitting}
             variant="outline"
-            className="w-full !bg-transparent border-white/10 text-slate-300 hover:border-violet-500/30 hover:text-white py-6 rounded-2xl transition-all"
+            className="w-full !bg-transparent border-border text-muted-foreground hover:border-violet-500/30 hover:text-white py-6 rounded-2xl transition-all"
           >
             {isEditMode ? 'Save draft' : 'Save Draft'}
           </Button>
         </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

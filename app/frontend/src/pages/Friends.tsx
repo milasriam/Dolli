@@ -36,12 +36,16 @@ export default function Friends() {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+      <div className="flex min-h-screen flex-col bg-background text-foreground">
         <Header />
-        <div className="mx-auto w-full max-w-lg flex-1 px-4 pb-16 pt-24 text-center">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-lg flex-1 px-4 pb-16 pt-24 text-center outline-none"
+        >
           <HeartHandshake className="w-14 h-14 text-sky-400 mx-auto mb-4" />
           <h1 className="text-2xl font-bold mb-2">Friends on Dolli</h1>
-          <p className="text-slate-400 text-sm mb-6">
+          <p className="text-muted-foreground text-sm mb-6">
             Friends are mutual follows — you and another member both follow each other. Sign in to see yours.
           </p>
           <button
@@ -51,16 +55,20 @@ export default function Friends() {
           >
             Sign in
           </button>
-        </div>
+        </main>
         <SiteFooter />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <Header />
-      <div className="mx-auto w-full max-w-2xl flex-1 px-4 pb-20 pt-24 sm:px-6">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-2xl flex-1 px-4 pb-20 pt-24 outline-none sm:px-6"
+      >
         <PageHeader
           icon={
             <PageHeaderIconFrame className="border-sky-500/25 bg-sky-500/15">
@@ -87,9 +95,9 @@ export default function Friends() {
             ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-[#13131A] px-6 py-12 text-center">
-            <p className="text-slate-300 font-medium mb-2">No friends yet</p>
-            <p className="text-sm text-slate-500">
+          <div className="rounded-2xl border border-border bg-card px-6 py-12 text-center">
+            <p className="text-muted-foreground font-medium mb-2">No friends yet</p>
+            <p className="text-sm text-muted-foreground">
               Follow someone from a fundraiser or People search — when they follow you back, you’ll both show up here.
             </p>
           </div>
@@ -98,11 +106,11 @@ export default function Friends() {
             {items.map((row) => (
               <li
                 key={row.user_id}
-                className="rounded-xl border border-white/10 bg-[#13131A] px-4 py-3 flex items-center justify-between gap-3"
+                className="rounded-xl border border-border bg-card px-4 py-3 flex items-center justify-between gap-3"
               >
                 <div className="min-w-0">
                   <p className="font-semibold text-white truncate">{row.name?.trim() || 'Dolli member'}</p>
-                  <p className="text-[11px] text-slate-500 truncate">Mutual follow</p>
+                  <p className="text-[11px] text-muted-foreground truncate">Mutual follow</p>
                 </div>
                 <Link
                   to={`/search/users?q=${encodeURIComponent(row.name?.trim() || row.user_id)}`}
@@ -114,7 +122,7 @@ export default function Friends() {
             ))}
           </ul>
         )}
-      </div>
+      </main>
       <SiteFooter />
     </div>
   );

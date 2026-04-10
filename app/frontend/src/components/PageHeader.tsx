@@ -21,7 +21,7 @@ export type PageHeaderProps = {
 };
 
 const defaultIconFrame =
-  'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]';
+  'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/30';
 
 export function PageHeaderIconFrame({ className, children }: { className?: string; children: ReactNode }) {
   return <div className={cn(defaultIconFrame, className)}>{children}</div>;
@@ -43,8 +43,8 @@ export function PageHeader({
 }: PageHeaderProps) {
   const titleClass =
     size === 'lg'
-      ? 'text-3xl font-bold tracking-tight text-white sm:text-4xl'
-      : 'text-2xl font-bold tracking-tight text-white sm:text-3xl';
+      ? 'text-3xl font-bold tracking-tight text-foreground sm:text-4xl'
+      : 'text-2xl font-bold tracking-tight text-foreground sm:text-3xl';
 
   return (
     <header className={cn('mb-8', className)}>
@@ -59,7 +59,7 @@ export function PageHeader({
           <div className="min-w-0 flex-1">
             <h1 className={titleClass}>{title}</h1>
             {description != null && description !== '' ? (
-              <div className="mt-1.5 text-sm leading-relaxed text-slate-400">{description}</div>
+              <div className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{description}</div>
             ) : null}
           </div>
         </div>

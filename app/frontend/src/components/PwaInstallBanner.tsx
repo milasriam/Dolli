@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Download, Share2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -41,6 +42,7 @@ function dismissStillActive(): boolean {
  * Reduces “browser-only” friction: Android/Desktop install prompt + iOS Add to Home Screen hint.
  */
 export function PwaInstallBanner() {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [variant, setVariant] = useState<'chrome' | 'ios' | null>(null);
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
@@ -92,37 +94,31 @@ export function PwaInstallBanner() {
         'pb-[max(0.75rem,env(safe-area-inset-bottom))] pointer-events-none',
       )}
       role="region"
-      aria-label="Install Dolli on your device"
+      aria-label={t('pwa.regionAria')}
     >
       <div
         className={cn(
           'pointer-events-auto flex w-full max-w-lg items-start gap-3 rounded-2xl border border-violet-500/35',
-          'bg-[#13131A]/95 px-4 py-3 shadow-2xl shadow-black/50 backdrop-blur-md',
+          'bg-card/95 px-4 py-3 shadow-2xl shadow-black/50 backdrop-blur-md',
         )}
       >
         <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-violet-500/20">
           {variant === 'chrome' ? (
-            <Download className="h-4 w-4 text-violet-300" />
+            <Download className="h-4 w-4 text-violet-700 dark:text-violet-300" />
           ) : (
-            <Share2 className="h-4 w-4 text-violet-300" />
+            <Share2 className="h-4 w-4 text-violet-700 dark:text-violet-300" />
           )}
         </div>
-        <div className="min-w-0 flex-1 text-sm leading-snug text-slate-200">
+        <div className="min-w-0 flex-1 text-sm leading-snug text-foreground">
           {variant === 'chrome' ? (
             <>
-              <p className="font-semibold text-white">Install Dolli</p>
-              <p className="mt-1 text-slate-400">
-                Open from your home screen — faster return, app-like frame, same secure web app.
-              </p>
+              <p className="font-semibold text-foreground">{t('pwa.installTitle')}</p>
+              <p className="mt-1 text-muted-foreground">{t('pwa.installBody')}</p>
             </>
           ) : (
             <>
-              <p className="font-semibold text-white">Add Dolli to Home Screen</p>
-              <p className="mt-1 text-slate-400">
-                Tap <span className="font-medium text-white">Share</span>, then{' '}
-                <span className="font-medium text-white">Add to Home Screen</span> — best experience on iPhone
-                before the native app ships.
-              </p>
+              <p className="font-semibold text-foreground">{t('pwa.addHomeTitle')}</p>
+              <p className="mt-1 text-muted-foreground">{t('pwa.addHomeBody')}</p>
             </>
           )}
         </div>
@@ -131,9 +127,9 @@ export function PwaInstallBanner() {
             type="button"
             size="icon"
             variant="ghost"
-            className="h-8 w-8 text-slate-500 hover:text-white"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
             onClick={dismiss}
-            aria-label="Dismiss"
+            aria-label={t('pwa.dismiss')}
           >
             <X className="h-4 w-4" />
           </Button>
@@ -141,10 +137,10 @@ export function PwaInstallBanner() {
             <Button
               type="button"
               size="sm"
-              className="h-8 rounded-lg bg-violet-600 px-3 text-xs hover:bg-violet-500"
+              className="h-8 rounded-lg bg-violet-600 px-3 text-xs text-white hover:bg-violet-500"
               onClick={() => void install()}
             >
-              Install
+              {t('pwa.install')}
             </Button>
           )}
         </div>

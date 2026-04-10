@@ -312,47 +312,59 @@ export default function AdminDashboard() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <div className="min-h-screen bg-background text-foreground">
         <Header />
-        <div className="pt-24 flex items-center justify-center">
-          <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex items-center justify-center pt-24 outline-none"
+        >
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
+        </main>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <div className="min-h-screen bg-background text-foreground">
         <Header />
-        <div className="pt-24 text-center max-w-md mx-auto px-4">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto max-w-md px-4 pt-24 text-center outline-none"
+        >
           <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center mx-auto mb-6">
             <User className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-2xl font-bold mb-3">Sign in to view analytics</h2>
-          <p className="text-slate-400 mb-6">Access the admin dashboard to track platform performance.</p>
+          <p className="text-muted-foreground mb-6">Access the admin dashboard to track platform performance.</p>
           <Button
             onClick={login}
             className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold px-8 py-6 rounded-2xl shadow-2xl shadow-violet-500/25 border-0"
           >
             Sign In
           </Button>
-        </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <Header />
 
-      <div className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16 pt-24 sm:px-6 lg:px-8">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-7xl flex-1 px-4 pb-16 pt-24 outline-none sm:px-6 lg:px-8"
+      >
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
             <BarChart3 className="w-8 h-8 text-violet-400" />
             Analytics Dashboard
           </h1>
-          <p className="text-slate-400">Platform performance & referral analytics</p>
+          <p className="text-muted-foreground">Platform performance & referral analytics</p>
         </div>
 
         {/* Overview Stats */}
@@ -364,34 +376,34 @@ export default function AdminDashboard() {
             { label: 'Total Shares', value: (stats?.total_shares || 0).toLocaleString(), icon: Share2, color: 'text-pink-400', bg: 'bg-pink-500/10' },
             { label: 'Avg Completion', value: `${Math.round(stats?.avg_completion || 0)}%`, icon: TrendingUp, color: 'text-amber-400', bg: 'bg-amber-500/10' },
           ].map((stat) => (
-            <div key={stat.label} className="bg-[#13131A] rounded-xl border border-white/5 p-5">
+            <div key={stat.label} className="bg-card rounded-xl border border-border p-5">
               <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center mb-3`}>
                 <stat.icon className={`w-5 h-5 ${stat.color}`} />
               </div>
               <div className="text-2xl font-bold">{stat.value}</div>
-              <div className="text-xs text-slate-500 mt-1">{stat.label}</div>
+              <div className="text-xs text-muted-foreground mt-1">{stat.label}</div>
             </div>
           ))}
         </div>
 
         {isAdmin && productEvents && (
-          <div className="mb-8 bg-[#13131A] rounded-2xl border border-white/5 p-6">
+          <div className="mb-8 bg-card rounded-2xl border border-border p-6">
             <h3 className="text-lg font-bold mb-1 flex items-center gap-2">
               <MousePointerClick className="w-5 h-5 text-cyan-400" />
               Web product events
             </h3>
-            <p className="text-xs text-slate-500 mb-4">
+            <p className="text-xs text-muted-foreground mb-4">
               Last {productEvents.days} days · {productEvents.total.toLocaleString()} total · since{' '}
               {new Date(productEvents.since_iso).toLocaleString()}
             </p>
             {productEvents.by_event.length === 0 ? (
-              <p className="text-sm text-slate-500">No events recorded yet. Ensure Alembic migration for client events is applied.</p>
+              <p className="text-sm text-muted-foreground">No events recorded yet. Ensure Alembic migration for client events is applied.</p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {productEvents.by_event.map((row) => (
-                  <div key={row.event} className="rounded-xl bg-white/5 border border-white/5 px-3 py-3">
+                  <div key={row.event} className="rounded-xl bg-white/5 border border-border px-3 py-3">
                     <div className="text-xl font-bold text-white">{row.count.toLocaleString()}</div>
-                    <div className="text-[11px] text-slate-500 truncate mt-0.5" title={row.event}>
+                    <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={row.event}>
                       {row.event}
                     </div>
                   </div>
@@ -403,7 +415,7 @@ export default function AdminDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Referral Funnel */}
-          <div className="bg-[#13131A] rounded-2xl border border-white/5 p-6">
+          <div className="bg-card rounded-2xl border border-border p-6">
             <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
               <Zap className="w-5 h-5 text-amber-400" />
               Referral Funnel
@@ -418,11 +430,11 @@ export default function AdminDashboard() {
               ].map((step) => (
                 <div key={step.label}>
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-slate-300">{step.label}</span>
+                    <span className="text-muted-foreground">{step.label}</span>
                     <span className="text-white font-semibold">
                       {step.value.toLocaleString()}
                       {step.rate !== null && (
-                        <span className="text-slate-500 ml-1">({step.rate}%)</span>
+                        <span className="text-muted-foreground ml-1">({step.rate}%)</span>
                       )}
                     </span>
                   </div>
@@ -436,9 +448,9 @@ export default function AdminDashboard() {
               ))}
             </div>
 
-            <div className="mt-6 p-4 rounded-xl bg-white/5 border border-white/5">
+            <div className="mt-6 p-4 rounded-xl bg-white/5 border border-border">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-400">Viral Coefficient (K-factor)</span>
+                <span className="text-sm text-muted-foreground">Viral Coefficient (K-factor)</span>
                 <span className={`text-2xl font-bold ${(funnel?.viral_coefficient || 0) >= 1 ? 'text-emerald-400' : 'text-amber-400'}`}>
                   {funnel?.viral_coefficient || 0}
                   {(funnel?.viral_coefficient || 0) >= 1 ? (
@@ -448,7 +460,7 @@ export default function AdminDashboard() {
                   )}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 {(funnel?.viral_coefficient || 0) >= 1
                   ? '🎉 Viral growth! Each donor brings more than 1 new donor.'
                   : 'Target: K > 1 for viral growth'}
@@ -457,7 +469,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Platform Breakdown */}
-          <div className="bg-[#13131A] rounded-2xl border border-white/5 p-6">
+          <div className="bg-card rounded-2xl border border-border p-6">
             <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
               <Share2 className="w-5 h-5 text-blue-400" />
               Platform Performance
@@ -466,8 +478,8 @@ export default function AdminDashboard() {
             {platforms.length === 0 ? (
               <div className="text-center py-12">
                 <Share2 className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-400">No platform data yet</p>
-                <p className="text-xs text-slate-500 mt-1">Share campaigns to see platform analytics</p>
+                <p className="text-muted-foreground">No platform data yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Share campaigns to see platform analytics</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -483,15 +495,15 @@ export default function AdminDashboard() {
                     <div className="grid grid-cols-3 gap-3 text-center">
                       <div>
                         <div className="text-lg font-bold">{p.shares}</div>
-                        <div className="text-xs text-slate-500">Shares</div>
+                        <div className="text-xs text-muted-foreground">Shares</div>
                       </div>
                       <div>
                         <div className="text-lg font-bold">{p.clicks}</div>
-                        <div className="text-xs text-slate-500">Clicks</div>
+                        <div className="text-xs text-muted-foreground">Clicks</div>
                       </div>
                       <div>
                         <div className="text-lg font-bold">{p.donations}</div>
-                        <div className="text-xs text-slate-500">Donations</div>
+                        <div className="text-xs text-muted-foreground">Donations</div>
                       </div>
                     </div>
                   </div>
@@ -503,10 +515,10 @@ export default function AdminDashboard() {
 
         {isAdmin && (
           <div className="mt-10">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500 px-1 mb-3">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground px-1 mb-3">
               Partner &amp; early access
             </h2>
-          <div className="bg-[#13131A] rounded-2xl border border-white/5 p-6">
+          <div className="bg-card rounded-2xl border border-border p-6">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
               <h3 className="text-lg font-bold flex items-center gap-2">
                 <ListChecks className="w-5 h-5 text-emerald-400" />
@@ -519,7 +531,7 @@ export default function AdminDashboard() {
                   size="sm"
                   disabled={pilotLoading || pilotSaving}
                   onClick={() => void loadPilotCreators()}
-                  className="border-white/15 bg-white/5 text-white hover:bg-white/10"
+                  className="border-border bg-white/5 text-white hover:bg-white/10"
                 >
                   Refresh
                 </Button>
@@ -534,9 +546,9 @@ export default function AdminDashboard() {
                 </Button>
               </div>
             </div>
-            <p className="text-xs text-slate-500 mb-3">
-              Accounts with these emails can <span className="text-slate-300">create campaigns</span> without a prior
-              paid donation. Stored in the database; server env <code className="text-slate-400">PILOT_CAMPAIGN_CREATE_EMAILS</code>{' '}
+            <p className="text-xs text-muted-foreground mb-3">
+              Accounts with these emails can <span className="text-muted-foreground">create campaigns</span> without a prior
+              paid donation. Stored in the database; server env <code className="text-muted-foreground">PILOT_CAMPAIGN_CREATE_EMAILS</code>{' '}
               is merged in (remove from env when you want DB-only control).
             </p>
             {pilotPayload && pilotPayload.env_emails.length > 0 && (
@@ -546,13 +558,13 @@ export default function AdminDashboard() {
               </div>
             )}
             {pilotPayload && (
-              <p className="text-[11px] text-slate-500 mb-2">
-                Effective allowlist now: <span className="text-slate-300">{pilotPayload.effective_emails.length}</span>{' '}
+              <p className="text-[11px] text-muted-foreground mb-2">
+                Effective allowlist now: <span className="text-muted-foreground">{pilotPayload.effective_emails.length}</span>{' '}
                 email(s)
               </p>
             )}
             <textarea
-              className="w-full min-h-[140px] rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 font-mono"
+              className="w-full min-h-[140px] rounded-xl border border-border bg-black/30 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 font-mono"
               placeholder={'one email per line or comma-separated\npilot@example.com'}
               value={pilotText}
               onChange={(e) => setPilotText(e.target.value)}
@@ -560,11 +572,11 @@ export default function AdminDashboard() {
               spellCheck={false}
             />
             {pilotLoading && !pilotPayload && (
-              <p className="text-xs text-slate-500 mt-2">Loading…</p>
+              <p className="text-xs text-muted-foreground mt-2">Loading…</p>
             )}
           </div>
 
-          <div className="mt-6 bg-[#13131A] rounded-2xl border border-white/5 p-6">
+          <div className="mt-6 bg-card rounded-2xl border border-border p-6">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
               <h3 className="text-lg font-bold flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-amber-400" />
@@ -577,7 +589,7 @@ export default function AdminDashboard() {
                   size="sm"
                   disabled={curatedLoading || curatedSaving}
                   onClick={() => void loadCuratedBadges()}
-                  className="border-white/15 bg-white/5 text-white hover:bg-white/10"
+                  className="border-border bg-white/5 text-white hover:bg-white/10"
                 >
                   Refresh
                 </Button>
@@ -589,7 +601,7 @@ export default function AdminDashboard() {
                   onClick={() =>
                     setCuratedRows((rows) => [...rows, { email: '', label: '', slug: '', highlight: 'none' }])
                   }
-                  className="border-white/15 bg-white/5 text-white hover:bg-white/10"
+                  className="border-border bg-white/5 text-white hover:bg-white/10"
                 >
                   Add row
                 </Button>
@@ -604,27 +616,27 @@ export default function AdminDashboard() {
                 </Button>
               </div>
             </div>
-            <p className="text-xs text-slate-500 mb-4">
-              Shown on their profile and in the header, and <span className="text-slate-400">publicly on their campaign
-              pages</span> next to “Organizer”. <span className="text-slate-400">Visual tier</span> adds a contrast frame
+            <p className="text-xs text-muted-foreground mb-4">
+              Shown on their profile and in the header, and <span className="text-muted-foreground">publicly on their campaign
+              pages</span> next to “Organizer”. <span className="text-muted-foreground">Visual tier</span> adds a contrast frame
               (and a stronger “featured” look reserved for future paid promotion). Keyed by login email; leave slug
               empty to auto-generate from the label.
             </p>
             <div className="space-y-3">
               {curatedRows.length === 0 && !curatedLoading ? (
-                <p className="text-sm text-slate-500 py-4 text-center border border-dashed border-white/10 rounded-xl">
+                <p className="text-sm text-muted-foreground py-4 text-center border border-dashed border-border rounded-xl">
                   No rows yet — use “Add row” or Refresh after migration.
                 </p>
               ) : (
                 curatedRows.map((row, idx) => (
                   <div
                     key={`badge-${idx}`}
-                    className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end rounded-xl border border-white/5 bg-black/20 p-3"
+                    className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end rounded-xl border border-border bg-black/20 p-3"
                   >
-                    <label className="sm:col-span-3 text-[11px] text-slate-500 uppercase tracking-wide block">
+                    <label className="sm:col-span-3 text-[11px] text-muted-foreground uppercase tracking-wide block">
                       Email
                       <input
-                        className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-2 py-2 text-sm text-white"
+                        className="mt-1 w-full rounded-lg border border-border bg-black/40 px-2 py-2 text-sm text-white"
                         value={row.email}
                         onChange={(e) => {
                           const v = e.target.value;
@@ -634,10 +646,10 @@ export default function AdminDashboard() {
                         spellCheck={false}
                       />
                     </label>
-                    <label className="sm:col-span-3 text-[11px] text-slate-500 uppercase tracking-wide block">
+                    <label className="sm:col-span-3 text-[11px] text-muted-foreground uppercase tracking-wide block">
                       Badge text
                       <input
-                        className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-2 py-2 text-sm text-white"
+                        className="mt-1 w-full rounded-lg border border-border bg-black/40 px-2 py-2 text-sm text-white"
                         value={row.label}
                         onChange={(e) => {
                           const v = e.target.value;
@@ -647,10 +659,10 @@ export default function AdminDashboard() {
                         maxLength={64}
                       />
                     </label>
-                    <label className="sm:col-span-2 text-[11px] text-slate-500 uppercase tracking-wide block">
+                    <label className="sm:col-span-2 text-[11px] text-muted-foreground uppercase tracking-wide block">
                       Slug (optional)
                       <input
-                        className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-2 py-2 text-sm text-white font-mono"
+                        className="mt-1 w-full rounded-lg border border-border bg-black/40 px-2 py-2 text-sm text-white font-mono"
                         value={row.slug}
                         onChange={(e) => {
                           const v = e.target.value;
@@ -660,10 +672,10 @@ export default function AdminDashboard() {
                         spellCheck={false}
                       />
                     </label>
-                    <label className="sm:col-span-3 text-[11px] text-slate-500 uppercase tracking-wide block">
+                    <label className="sm:col-span-3 text-[11px] text-muted-foreground uppercase tracking-wide block">
                       Visual tier
                       <select
-                        className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-2 py-2 text-sm text-white"
+                        className="mt-1 w-full rounded-lg border border-border bg-black/40 px-2 py-2 text-sm text-white"
                         value={row.highlight}
                         onChange={(e) => {
                           const v = e.target.value as CuratedHighlight;
@@ -691,14 +703,14 @@ export default function AdminDashboard() {
               )}
             </div>
             {curatedLoading && curatedRows.length === 0 ? (
-              <p className="text-xs text-slate-500 mt-3">Loading…</p>
+              <p className="text-xs text-muted-foreground mt-3">Loading…</p>
             ) : null}
           </div>
           </div>
         )}
 
         {isAdmin && (
-          <div className="mt-10 bg-[#13131A] rounded-2xl border border-white/5 p-6">
+          <div className="mt-10 bg-card rounded-2xl border border-border p-6">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
               <h3 className="text-lg font-bold flex items-center gap-2">
                 <ShieldAlert className="w-5 h-5 text-rose-400" />
@@ -710,26 +722,26 @@ export default function AdminDashboard() {
                 size="sm"
                 disabled={nsfwLoading}
                 onClick={() => void loadNsfwQueue()}
-                className="border-white/15 bg-white/5 text-white hover:bg-white/10"
+                className="border-border bg-white/5 text-white hover:bg-white/10"
               >
                 Refresh
               </Button>
             </div>
-            <p className="text-xs text-slate-500 mb-4">
+            <p className="text-xs text-muted-foreground mb-4">
               Campaigns flagged as sensitive ({nsfwTotal} total). Open each page to review copy and media before broad
               distribution.
             </p>
             {nsfwLoading && nsfwRows.length === 0 ? (
-              <div className="py-12 text-center text-slate-500 text-sm">Loading…</div>
+              <div className="py-12 text-center text-muted-foreground text-sm">Loading…</div>
             ) : nsfwRows.length === 0 ? (
-              <div className="py-12 text-center text-slate-500 text-sm">No flagged campaigns right now.</div>
+              <div className="py-12 text-center text-muted-foreground text-sm">No flagged campaigns right now.</div>
             ) : (
-              <ul className="divide-y divide-white/5 rounded-xl border border-white/5 overflow-hidden">
+              <ul className="divide-y divide-border rounded-xl border border-border overflow-hidden">
                 {nsfwRows.map((row) => (
                   <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-black/20">
                     <div className="min-w-0">
                       <p className="font-medium text-white truncate">{row.title || `Campaign #${row.id}`}</p>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[11px] text-muted-foreground">
                         #{row.id}
                         {row.status ? ` · ${row.status}` : ''}
                         {row.category ? ` · ${row.category}` : ''}
@@ -747,7 +759,7 @@ export default function AdminDashboard() {
             )}
           </div>
         )}
-      </div>
+      </main>
       <SiteFooter />
     </div>
   );

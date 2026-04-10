@@ -155,15 +155,19 @@ export default function DonationSuccess() {
   const cid = campaignId ? Number(campaignId) : NaN;
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <Header />
 
-      <div className="mx-auto w-full max-w-lg flex-1 px-4 pb-16 pt-24">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-lg flex-1 px-4 pb-16 pt-24 outline-none"
+      >
         {paymentStatus === 'verifying' && (
           <div className="text-center py-20">
             <div className="w-16 h-16 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-slate-300 font-medium">Verifying your donation…</p>
-            <p className="text-xs text-slate-500 mt-2">
+            <p className="text-muted-foreground font-medium">Verifying your donation…</p>
+            <p className="text-xs text-muted-foreground mt-2">
               Contacting the payment provider
               {verifyAttempt > 0 ? ` (round ${verifyAttempt} of ${MAX_VERIFY_ROUNDS})` : ''}.
             </p>
@@ -174,7 +178,7 @@ export default function DonationSuccess() {
           <div className="text-center py-20">
             <div className="text-5xl mb-4">😔</div>
             <h2 className="text-2xl font-bold mb-2">Something went wrong</h2>
-            <p className="text-slate-400 mb-6">We could not verify your payment yet. Please try again.</p>
+            <p className="text-muted-foreground mb-6">We could not verify your payment yet. Please try again.</p>
             <Link to={`/campaign/${campaignId}`}>
               <Button className="bg-violet-600 hover:bg-violet-500 text-white border-0">
                 Back to Campaign
@@ -187,7 +191,7 @@ export default function DonationSuccess() {
           <div className="text-center py-20">
             <div className="text-5xl mb-4">💳</div>
             <h2 className="text-2xl font-bold mb-2">Payment Was Not Completed</h2>
-            <p className="text-slate-400 mb-6">You can return to the campaign and try again with another method.</p>
+            <p className="text-muted-foreground mb-6">You can return to the campaign and try again with another method.</p>
             <Link to={`/campaign/${campaignId}`}>
               <Button className="bg-violet-600 hover:bg-violet-500 text-white border-0">
                 Return to Campaign
@@ -203,13 +207,13 @@ export default function DonationSuccess() {
                 <Heart className="w-10 h-10 text-white" />
               </div>
               <h1 className="text-3xl font-black mb-2">Donation Is Processing</h1>
-              <p className="text-slate-400">We are waiting for payment confirmation from {provider === 'kaspi_pay' ? 'Kaspi Pay' : 'Halyk EPAY'}.</p>
+              <p className="text-muted-foreground">We are waiting for payment confirmation from {provider === 'kaspi_pay' ? 'Kaspi Pay' : 'Halyk EPAY'}.</p>
             </div>
 
-            <div className="bg-[#13131A] rounded-2xl border border-white/5 p-5 text-sm text-slate-300 space-y-2">
+            <div className="bg-card rounded-2xl border border-border p-5 text-sm text-muted-foreground space-y-2">
               <p>Invoice: <span className="text-white font-medium">{invoiceId}</span></p>
               <p>Provider: <span className="text-white font-medium">{provider}</span></p>
-              <p className="text-slate-400">
+              <p className="text-muted-foreground">
                 {provider === 'kaspi_pay'
                   ? 'Kaspi Pay is currently confirmed manually after payment on the merchant side.'
                   : 'If you just completed the payment, refresh this page in a few seconds.'}
@@ -238,7 +242,7 @@ export default function DonationSuccess() {
                 Check again
               </Button>
               <Link to={`/campaign/${campaignId}`} className="flex-1">
-                <Button variant="outline" className="w-full !bg-transparent border-white/10 text-white">
+                <Button variant="outline" className="w-full !bg-transparent border-border text-white">
                   Back
                 </Button>
               </Link>
@@ -252,12 +256,15 @@ export default function DonationSuccess() {
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-2xl shadow-emerald-500/30 mb-4">
                 <Heart className="w-10 h-10 text-white fill-white" />
               </div>
-              <h1 className="text-3xl font-black mb-2">You're Amazing! 🎉</h1>
-              <p className="text-slate-400">Your donation is making a real difference</p>
+              <h1 className="text-3xl font-black mb-2">That actually landed 🎉</h1>
+              <p className="text-muted-foreground">
+                You turned a scroll-moment into fuel for this fundraiser — optional next step: let your people know so
+                they can pile on.
+              </p>
             </div>
 
             {campaign && (
-              <div className="bg-[#13131A] rounded-2xl border border-white/5 p-5">
+              <div className="bg-card rounded-2xl border border-border p-5">
                 <div className="flex gap-4">
                   <img
                     src={campaign.image_url}
@@ -269,7 +276,7 @@ export default function DonationSuccess() {
                     <div className="mt-2">
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-emerald-400 font-bold">${campaign.raised_amount.toLocaleString()}</span>
-                        <span className="text-slate-500">{Math.round(progress)}%</span>
+                        <span className="text-muted-foreground">{Math.round(progress)}%</span>
                       </div>
                       <div className="h-2 bg-white/5 rounded-full overflow-hidden">
                         <div
@@ -283,32 +290,33 @@ export default function DonationSuccess() {
               </div>
             )}
 
-            <div className="bg-[#13131A] rounded-2xl border border-white/5 p-5 space-y-4">
+            <div className="bg-card rounded-2xl border border-border p-5 space-y-4">
               <h3 className="font-bold text-white flex items-center gap-2">
                 <Trophy className="w-5 h-5 text-amber-400" />
                 Rewards Earned
               </h3>
               <div className="grid grid-cols-3 gap-3">
-                <div className="text-center p-3 rounded-xl bg-white/5 border border-white/5">
+                <div className="text-center p-3 rounded-xl bg-white/5 border border-border">
                   <div className="text-2xl mb-1">*</div>
-                  <div className="text-xs text-slate-400">First Dollar</div>
+                  <div className="text-xs text-muted-foreground">First Dollar</div>
                 </div>
-                <div className="text-center p-3 rounded-xl bg-white/5 border border-white/5">
+                <div className="text-center p-3 rounded-xl bg-white/5 border border-border">
                   <div className="text-2xl mb-1">+</div>
-                  <div className="text-xs text-slate-400">Streak +1</div>
+                  <div className="text-xs text-muted-foreground">Streak +1</div>
                 </div>
-                <div className="text-center p-3 rounded-xl bg-white/5 border border-white/5">
+                <div className="text-center p-3 rounded-xl bg-white/5 border border-border">
                   <div className="text-2xl mb-1">KZT</div>
-                  <div className="text-xs text-slate-400">Impact Added</div>
+                  <div className="text-xs text-muted-foreground">Impact Added</div>
                 </div>
               </div>
             </div>
 
             <div className="bg-gradient-to-br from-violet-500/10 to-pink-500/10 rounded-2xl border border-violet-500/20 p-6 text-center">
               <Share2 className="w-8 h-8 text-violet-400 mx-auto mb-3" />
-              <h3 className="text-xl font-bold mb-2">You’re part of the ripple</h3>
-              <p className="text-sm text-slate-400 mb-5">
-                Share with a personal link (when signed in) — WhatsApp, Telegram, QR, native share, and more.
+              <h3 className="text-xl font-bold mb-2">Pass the vibe</h3>
+              <p className="text-sm text-muted-foreground mb-5">
+                If you’re signed in, your link attributes the ripple to you — Stories, WhatsApp, Telegram, QR, native
+                share.
               </p>
               <Button
                 type="button"
@@ -317,7 +325,7 @@ export default function DonationSuccess() {
                 className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 text-white font-semibold py-6 border-0 shadow-lg shadow-violet-500/20"
               >
                 <Share2 className="w-5 h-5 mr-2" />
-                Open share studio
+                Share in one tap
               </Button>
             </div>
 
@@ -340,7 +348,7 @@ export default function DonationSuccess() {
 
             <div className="flex gap-3">
               <Link to="/explore" className="flex-1">
-                <Button variant="outline" className="w-full !bg-transparent border-white/10 text-white rounded-xl py-6">
+                <Button variant="outline" className="w-full !bg-transparent border-border text-white rounded-xl py-6">
                   Explore More
                 </Button>
               </Link>
@@ -352,7 +360,7 @@ export default function DonationSuccess() {
             </div>
           </div>
         )}
-      </div>
+      </main>
       <SiteFooter />
     </div>
   );

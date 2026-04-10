@@ -1,19 +1,19 @@
 /**
- * Single source for marketing / footer IA — keep in sync with Header “browse” routes.
+ * Single source for marketing / footer IA — labels are i18n keys (`nav.*`).
  */
 export const SITE_DISCOVER_LINKS = [
-  { to: '/explore', label: 'Explore' },
-  { to: '/search/users', label: 'Find people' },
-  { to: '/friends', label: 'Friends' },
-  { to: '/create', label: 'Create fundraiser' },
+  { to: '/explore', labelKey: 'nav.explore' as const },
+  { to: '/search/users', labelKey: 'nav.findPeople' as const },
+  { to: '/friends', labelKey: 'nav.friends' as const },
+  { to: '/create', labelKey: 'nav.createFundraiser' as const },
 ] as const;
 
 export const SITE_ACCOUNT_LINKS_GUEST = [
-  { to: '/login', label: 'Sign in' },
-  { to: '/register', label: 'Create account' },
+  { to: '/login', labelKey: 'nav.signIn' as const },
+  { to: '/register', labelKey: 'nav.createAccount' as const },
 ] as const;
 
 export const SITE_ACCOUNT_LINKS_USER = [
-  { to: '/profile', label: 'Profile' },
-  { to: '/notifications', label: 'Notifications' },
+  { to: '/profile', labelKey: 'nav.profile' as const },
+  { to: '/notifications', labelKey: 'nav.notifications' as const },
 ] as const;

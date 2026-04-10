@@ -99,9 +99,13 @@ export default function UserSearch() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <Header />
-      <div className="mx-auto w-full max-w-2xl flex-1 px-4 pb-20 pt-24 sm:px-6">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-2xl flex-1 px-4 pb-20 pt-24 outline-none sm:px-6"
+      >
         <PageHeader
           title="Find people & organizations"
           description="Search by name, public profile title, or organization. Then follow to tailor your feeds and notifications."
@@ -115,12 +119,12 @@ export default function UserSearch() {
           }}
         >
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Name, org, or email fragment…"
-              className="w-full pl-10 pr-3 py-3 rounded-xl bg-[#13131A] border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-violet-500/40"
+              className="w-full pl-10 pr-3 py-3 rounded-xl bg-card border border-border text-white placeholder-slate-500 focus:outline-none focus:border-violet-500/40"
               aria-label="Search users"
             />
           </div>
@@ -136,18 +140,18 @@ export default function UserSearch() {
             ))}
           </div>
         ) : !qParam ? (
-          <p className="text-slate-500 text-sm">Type a query and press Search.</p>
+          <p className="text-muted-foreground text-sm">Type a query and press Search.</p>
         ) : results.length === 0 ? (
-          <p className="text-slate-400 text-sm">No matches for “{qParam}”.</p>
+          <p className="text-muted-foreground text-sm">No matches for “{qParam}”.</p>
         ) : (
           <ul className="space-y-2">
             {results.map((row) => (
               <li
                 key={row.user_id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#13131A] px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"
               >
                 <div className="min-w-0 flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/25 to-pink-500/15 border border-white/10 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/25 to-pink-500/15 border border-border flex items-center justify-center shrink-0">
                     {row.is_verified_organization ? (
                       <Building2 className="w-5 h-5 text-emerald-300" />
                     ) : (
@@ -165,7 +169,7 @@ export default function UserSearch() {
                         </span>
                       )}
                     </div>
-                    {row.subtitle && <p className="text-xs text-slate-500 truncate">{row.subtitle}</p>}
+                    {row.subtitle && <p className="text-xs text-muted-foreground truncate">{row.subtitle}</p>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -178,7 +182,7 @@ export default function UserSearch() {
                       onClick={() => void toggleFollow(row)}
                       className={
                         followMap[row.user_id]
-                          ? 'border-white/20 bg-transparent text-white'
+                          ? 'border-border bg-transparent text-white'
                           : 'bg-violet-600 hover:bg-violet-500 text-white border-0'
                       }
                     >
@@ -199,10 +203,10 @@ export default function UserSearch() {
           </ul>
         )}
         <p className="text-[11px] text-slate-600 mt-8">
-          Tip: open someone’s fundraiser and use <strong className="text-slate-500">Follow</strong> on the organizer
+          Tip: open someone’s fundraiser and use <strong className="text-muted-foreground">Follow</strong> on the organizer
           card to connect your feeds.
         </p>
-      </div>
+      </main>
       <SiteFooter />
     </div>
   );

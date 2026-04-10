@@ -56,6 +56,7 @@ From project root:
 5. Publishes the built frontend to `/opt/dolli/www/staging` or `/opt/dolli/www/prod`.
 6. Restarts the corresponding backend service (`dolli-backend-staging` or `dolli-backend-prod`).
 7. Runs health checks for the API and site.
+8. **Staging only:** runs `scripts/seed_demo_campaigns.py` once per deploy (idempotent). That script is the **only** bundled “many scenarios” dataset: it is not loaded at API startup, not tied to automated tests, and not run on production.
 
 ## Quick Post-Deploy Checks
 

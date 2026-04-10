@@ -384,7 +384,7 @@ export function ShareCampaignDialog({
         void channel('whatsapp', openWhatsApp);
       },
       className:
-        'border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/15 text-white',
+        'border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-950 dark:text-white',
     },
     {
       key: 'tg',
@@ -393,17 +393,18 @@ export function ShareCampaignDialog({
       onClick: () => {
         void channel('telegram', openTelegramShare);
       },
-      className: 'border-sky-500/25 bg-sky-500/10 hover:bg-sky-500/15 text-white',
+      className: 'border-sky-500/25 bg-sky-500/10 hover:bg-sky-500/15 text-sky-950 dark:text-white',
     },
     {
       key: 'th',
       label: 'Threads',
       sub: 'composer',
-      icon: <span className="text-[13px] font-bold text-white/90">@</span>,
+      icon: <span className="text-[13px] font-bold text-foreground/90 dark:text-white/90">@</span>,
       onClick: () => {
         void channel('threads', openThreadsShare);
       },
-      className: 'border-white/15 bg-white/5 hover:bg-white/10 text-white',
+      className:
+        'border-border bg-muted text-foreground hover:bg-muted/80 dark:bg-white/5 dark:hover:bg-white/10 dark:text-white',
     },
     {
       key: 'x',
@@ -413,7 +414,8 @@ export function ShareCampaignDialog({
       onClick: () => {
         void channel('twitter', openTwitterShare);
       },
-      className: 'border-white/15 bg-white/5 hover:bg-white/10 text-white',
+      className:
+        'border-border bg-muted text-foreground hover:bg-muted/80 dark:bg-white/5 dark:hover:bg-white/10 dark:text-white',
     },
     {
       key: 'fb',
@@ -423,7 +425,7 @@ export function ShareCampaignDialog({
       onClick: () => {
         void handleFacebookShare();
       },
-      className: 'border-blue-500/25 bg-blue-500/10 hover:bg-blue-500/15 text-white',
+      className: 'border-blue-500/25 bg-blue-500/10 hover:bg-blue-500/15 text-blue-950 dark:text-white',
     },
     {
       key: 'li',
@@ -433,7 +435,8 @@ export function ShareCampaignDialog({
       onClick: () => {
         void handleLinkedInShare();
       },
-      className: 'border-sky-600/30 bg-sky-900/20 hover:bg-sky-900/30 text-white',
+      className:
+        'border-sky-600/30 bg-sky-100/90 text-sky-950 hover:bg-sky-200/80 dark:bg-sky-900/20 dark:text-white dark:hover:bg-sky-900/30',
     },
     {
       key: 'tt',
@@ -443,7 +446,8 @@ export function ShareCampaignDialog({
       onClick: () => {
         void channel('tiktok', openTikTokShare);
       },
-      className: 'border-white/15 bg-black/60 hover:bg-black/80 text-white',
+      className:
+        'border-border bg-muted text-foreground hover:bg-muted/80 dark:bg-black/60 dark:text-white dark:hover:bg-black/80',
     },
     {
       key: 'tt_story',
@@ -456,7 +460,8 @@ export function ShareCampaignDialog({
           'Copied — TikTok Story: paste caption, add link sticker if you use one.',
         );
       },
-      className: 'border-white/15 bg-black/40 hover:bg-black/55 text-white',
+      className:
+        'border-border bg-muted text-foreground hover:bg-muted/80 dark:bg-black/40 dark:text-white dark:hover:bg-black/55',
     },
     {
       key: 'ig_story',
@@ -470,7 +475,7 @@ export function ShareCampaignDialog({
         );
       },
       className:
-        'border-pink-500/30 bg-gradient-to-br from-purple-600/30 to-pink-600/25 hover:from-purple-600/40 hover:to-pink-600/35 text-white',
+        'border-pink-500/30 bg-gradient-to-br from-purple-600/30 to-pink-600/25 hover:from-purple-600/40 hover:to-pink-600/35 text-purple-950 dark:text-white',
     },
     {
       key: 'ig_post',
@@ -484,7 +489,7 @@ export function ShareCampaignDialog({
         );
       },
       className:
-        'border-pink-500/30 bg-gradient-to-br from-purple-600/25 to-pink-600/20 hover:from-purple-600/35 hover:to-pink-600/30 text-white',
+        'border-pink-500/30 bg-gradient-to-br from-purple-600/25 to-pink-600/20 hover:from-purple-600/35 hover:to-pink-600/30 text-purple-950 dark:text-white',
     },
     {
       key: 'ig_reels',
@@ -498,7 +503,7 @@ export function ShareCampaignDialog({
         );
       },
       className:
-        'border-pink-500/30 bg-gradient-to-br from-fuchsia-600/25 to-orange-500/15 hover:from-fuchsia-600/35 hover:to-orange-500/25 text-white',
+        'border-pink-500/30 bg-gradient-to-br from-fuchsia-600/25 to-orange-500/15 hover:from-fuchsia-600/35 hover:to-orange-500/25 text-fuchsia-950 dark:text-white',
     },
     {
       key: 'yt_shorts',
@@ -511,7 +516,7 @@ export function ShareCampaignDialog({
           'Copied — paste into Shorts description when publishing.',
         );
       },
-      className: 'border-red-500/25 bg-red-950/30 hover:bg-red-950/45 text-white',
+      className: 'border-red-500/25 bg-red-100/90 text-red-950 hover:bg-red-200/80 dark:bg-red-950/30 dark:text-white dark:hover:bg-red-950/45',
     },
     {
       key: 'sms',
@@ -520,7 +525,7 @@ export function ShareCampaignDialog({
       onClick: () => {
         void channel('sms', openSmsShare);
       },
-      className: 'border-amber-500/25 bg-amber-500/10 hover:bg-amber-500/15 text-white',
+      className: 'border-amber-500/25 bg-amber-500/10 hover:bg-amber-500/15 text-amber-950 dark:text-white',
     },
   ];
 
@@ -528,46 +533,47 @@ export function ShareCampaignDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          'max-w-md border-white/10 bg-[#0f0f14] text-white shadow-2xl shadow-violet-500/10 sm:max-w-lg',
+          'max-w-md border-border bg-popover text-popover-foreground shadow-2xl shadow-violet-500/10 sm:max-w-lg',
+          'dark:bg-[#0f0f14] dark:text-foreground',
           'max-h-[90vh] overflow-y-auto',
         )}
       >
         <DialogHeader className="space-y-1 text-left">
-          <DialogTitle className="flex items-center gap-2 text-xl font-bold text-white">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/30 to-pink-500/20 border border-violet-500/30">
-              <Share2 className="h-4 w-4 text-violet-300" />
+          <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-500/30 bg-gradient-to-br from-violet-500/30 to-pink-500/20">
+              <Share2 className="h-4 w-4 text-violet-700 dark:text-violet-300" />
             </span>
-            Share studio
+            Share it your way
           </DialogTitle>
-          <DialogDescription className="text-slate-400 text-sm leading-relaxed">
-            Dolli writes channel-specific copy from this campaign card. Tweak voice and add a personal line,
-            then grab a polished image for Stories or Reels.
+          <DialogDescription className="text-muted-foreground text-sm leading-relaxed">
+            Channel-ready blurbs (TikTok, IG, WhatsApp, etc.) plus a clean card for Stories — tweak the tone, paste,
+            post.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="rounded-2xl border border-white/10 bg-[#13131A] p-4 flex gap-3">
+        <div className="rounded-2xl border border-border bg-card p-4 flex gap-3">
           {campaignImageUrl ? (
             <img
               src={campaignImageUrl}
               alt=""
-              className="h-20 w-20 rounded-xl object-cover flex-shrink-0 border border-white/10"
+              className="h-20 w-20 rounded-xl object-cover flex-shrink-0 border border-border"
             />
           ) : (
             <div className="h-20 w-20 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
-              <Sparkles className="w-8 h-8 text-violet-400" />
+              <Sparkles className="h-8 w-8 text-violet-600 dark:text-violet-400" />
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-white leading-snug line-clamp-2">{campaignTitle}</p>
+            <p className="line-clamp-2 font-semibold leading-snug text-foreground">{campaignTitle}</p>
             {progressPct != null && (
               <div className="mt-2">
-                <div className="flex justify-between text-[11px] text-slate-500 mb-1">
-                  <span className="text-emerald-400 font-medium">
+                <div className="flex justify-between text-[11px] text-muted-foreground mb-1">
+                  <span className="font-medium text-emerald-800 dark:text-emerald-400">
                     ${raisedAmount!.toLocaleString()} raised
                   </span>
                   <span>{Math.round(progressPct)}%</span>
                 </div>
-                <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500"
                     style={{ width: `${progressPct}%` }}
@@ -579,14 +585,14 @@ export function ShareCampaignDialog({
         </div>
 
         {!isAuthenticated && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-100/95">
+          <div className="rounded-xl border border-amber-500/30 bg-amber-50 px-3 py-2.5 text-xs text-amber-950 dark:bg-amber-500/10 dark:text-amber-100/95">
             <button
               type="button"
               onClick={() => {
                 onOpenChange(false);
                 onRequestLogin();
               }}
-              className="font-semibold text-white underline underline-offset-2 hover:text-amber-50"
+              className="font-semibold text-amber-900 underline underline-offset-2 hover:text-amber-950 dark:text-white dark:hover:text-amber-50"
             >
               Sign in
             </button>{' '}
@@ -595,7 +601,7 @@ export function ShareCampaignDialog({
         )}
 
         <div className="space-y-2">
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             <Type className="w-3.5 h-3.5" />
             Voice
           </div>
@@ -608,17 +614,17 @@ export function ShareCampaignDialog({
                 className={cn(
                   'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
                   tone === t.id
-                    ? 'border-violet-400/60 bg-violet-500/25 text-white'
-                    : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10',
+                    ? 'border-violet-400/60 bg-violet-500/20 text-violet-950 dark:bg-violet-500/25 dark:text-white'
+                    : 'border-border bg-muted text-muted-foreground hover:bg-muted/80 dark:bg-white/5 dark:hover:bg-white/10',
                 )}
               >
                 {t.label}
-                <span className="text-white/40 font-normal"> · {t.hint}</span>
+                <span className="font-normal text-muted-foreground dark:text-white/40"> · {t.hint}</span>
               </button>
             ))}
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="share-custom-line" className="text-xs text-slate-400">
+            <Label htmlFor="share-custom-line" className="text-xs text-muted-foreground">
               Your line (optional, woven into captions)
             </Label>
             <Input
@@ -626,23 +632,23 @@ export function ShareCampaignDialog({
               value={customLine}
               onChange={(e) => setCustomLine(e.target.value.slice(0, 120))}
               placeholder="e.g. In memory of dad — every dollar to meals."
-              className="h-10 rounded-xl border-white/10 bg-black/30 text-white placeholder:text-slate-600"
+              className="h-10 rounded-xl border-border bg-muted text-foreground placeholder:text-muted-foreground"
               maxLength={120}
             />
           </div>
         </div>
 
         <Tabs value={shareTab} onValueChange={setShareTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 h-11 rounded-xl border border-white/10 bg-black/30 p-1">
+          <TabsList className="grid h-11 w-full grid-cols-2 rounded-xl border border-border bg-muted p-1 dark:bg-black/30">
             <TabsTrigger
               value="captions"
-              className="rounded-lg text-xs sm:text-sm data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-md text-slate-300"
+              className="rounded-lg text-xs sm:text-sm data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-md text-muted-foreground"
             >
               Captions & taps
             </TabsTrigger>
             <TabsTrigger
               value="visuals"
-              className="rounded-lg text-xs sm:text-sm data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-md text-slate-300"
+              className="rounded-lg text-xs sm:text-sm data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-md text-muted-foreground"
             >
               Share card
             </TabsTrigger>
@@ -680,7 +686,9 @@ export function ShareCampaignDialog({
                   {ch.icon}
                   <span className="flex flex-col min-w-0">
                     <span className="truncate">{ch.label}</span>
-                    {ch.sub && <span className="text-[10px] font-normal text-white/50">{ch.sub}</span>}
+                    {ch.sub && (
+                      <span className="text-[10px] font-normal text-muted-foreground dark:text-white/50">{ch.sub}</span>
+                    )}
                   </span>
                 </button>
               ))}
@@ -692,7 +700,7 @@ export function ShareCampaignDialog({
                 variant="outline"
                 disabled={working}
                 onClick={() => void handleCopy()}
-                className="flex-1 h-11 rounded-xl border-white/15 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                className="flex-1 h-11 rounded-xl border-border bg-muted text-foreground hover:bg-muted/80 hover:text-foreground dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
               >
                 {copied ? (
                   <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-400" />
@@ -703,8 +711,8 @@ export function ShareCampaignDialog({
               </Button>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/40 p-4 text-center">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+            <div className="rounded-2xl border border-border bg-muted/60 p-4 text-center dark:bg-black/40">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                 Scan to open (public link)
               </p>
               <img
@@ -712,21 +720,21 @@ export function ShareCampaignDialog({
                 alt=""
                 width={180}
                 height={180}
-                className="mx-auto rounded-lg border border-white/10 bg-white p-1"
+                className="mx-auto rounded-lg border border-border bg-white p-1"
               />
-              <p className="text-[10px] text-slate-500 mt-2">
+              <p className="text-[10px] text-muted-foreground mt-2">
                 Great for screenshots or projecting. Tracked links stay in the buttons above when you’re signed in.
               </p>
             </div>
           </TabsContent>
 
           <TabsContent value="visuals" className="mt-4 space-y-4">
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               High-res PNG with title, progress, your optional line, and link block — like a year-in-review slide,
               tuned for this fundraiser.
             </p>
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Palette</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Palette</p>
               <div className="grid grid-cols-4 gap-1.5">
                 {CARD_THEMES.map((th) => (
                   <button
@@ -736,8 +744,8 @@ export function ShareCampaignDialog({
                     className={cn(
                       'rounded-lg border py-2 text-[10px] font-medium transition-colors',
                       cardTheme === th.id
-                        ? 'border-violet-400/70 bg-white/10 text-white'
-                        : 'border-white/10 bg-black/30 text-slate-400 hover:bg-white/5',
+                        ? 'border-violet-400/70 bg-violet-500/15 text-foreground dark:bg-white/10 dark:text-white'
+                        : 'border-border bg-muted text-muted-foreground hover:bg-muted/80 dark:bg-black/30 dark:hover:bg-white/5',
                     )}
                   >
                     {th.label}
@@ -746,7 +754,7 @@ export function ShareCampaignDialog({
               </div>
             </div>
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Shape</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Shape</p>
               <div className="grid grid-cols-3 gap-1.5">
                 {CARD_FORMATS.map((f) => (
                   <button
@@ -756,21 +764,21 @@ export function ShareCampaignDialog({
                     className={cn(
                       'rounded-lg border px-2 py-2 text-left transition-colors',
                       cardFormat === f.id
-                        ? 'border-violet-400/70 bg-violet-500/15 text-white'
-                        : 'border-white/10 bg-black/30 text-slate-400 hover:bg-white/5',
+                        ? 'border-violet-400/70 bg-violet-500/15 text-foreground dark:text-white'
+                        : 'border-border bg-muted text-muted-foreground hover:bg-muted/80 dark:bg-black/30 dark:hover:bg-white/5',
                     )}
                   >
                     <span className="block text-xs font-semibold">{f.label}</span>
-                    <span className="block text-[10px] text-white/45">{f.hint}</span>
+                    <span className="block text-[10px] text-muted-foreground dark:text-white/45">{f.hint}</span>
                   </button>
                 ))}
               </div>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/50 p-3 flex flex-col items-center">
-              <p className="text-[10px] text-slate-500 mb-2 self-start uppercase tracking-wider font-semibold">
+            <div className="flex flex-col items-center rounded-2xl border border-border bg-muted/70 p-3 dark:bg-black/50">
+              <p className="text-[10px] text-muted-foreground mb-2 self-start uppercase tracking-wider font-semibold">
                 Live preview
               </p>
-              <div className="relative w-full max-h-[280px] flex items-center justify-center rounded-xl bg-black/40 min-h-[160px]">
+              <div className="relative flex min-h-[160px] w-full max-h-[280px] items-center justify-center rounded-xl bg-muted dark:bg-black/40">
                 {cardPreviewBusy && (
                   <Loader2 className="w-8 h-8 animate-spin text-violet-400 absolute" />
                 )}
@@ -778,7 +786,7 @@ export function ShareCampaignDialog({
                   <img
                     src={cardPreviewUrl}
                     alt="Share card preview"
-                    className="max-h-[260px] w-auto object-contain rounded-lg border border-white/10 shadow-lg"
+                    className="max-h-[260px] w-auto object-contain rounded-lg border border-border shadow-lg"
                   />
                 )}
               </div>
@@ -786,7 +794,7 @@ export function ShareCampaignDialog({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="mt-3 border-white/15 text-white hover:bg-white/10"
+                className="mt-3 border-border text-foreground hover:bg-muted dark:text-white dark:hover:bg-white/10"
                 onClick={() => void refreshCardPreview()}
                 disabled={cardPreviewBusy}
               >

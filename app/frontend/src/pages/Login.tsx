@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { authApi, fetchLoginOptions, type LoginOptions } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthChrome } from '@/components/AuthChrome';
@@ -52,18 +53,19 @@ function SocialButton({
     <button
       type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3.5 text-left hover:bg-white/[0.1] hover:border-white/20 transition-all"
+      className="flex w-full items-center gap-3 rounded-xl border border-border bg-muted/50 px-4 py-3.5 text-left text-foreground transition-all hover:bg-muted hover:border-muted-foreground/20"
     >
-      <span className="shrink-0 text-white">{icon}</span>
+      <span className="shrink-0 text-foreground">{icon}</span>
       <span className="min-w-0">
-        <span className="block font-semibold text-white text-sm">{label}</span>
-        {sub ? <span className="block text-xs text-slate-500 mt-0.5">{sub}</span> : null}
+        <span className="block text-sm font-semibold text-foreground">{label}</span>
+        {sub ? <span className="block text-xs text-muted-foreground mt-0.5">{sub}</span> : null}
       </span>
     </button>
   );
 }
 
 export default function Login() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const isRegister = location.pathname === '/register';
@@ -98,9 +100,7 @@ export default function Login() {
       await authApi.localLogin(email.trim(), password);
       const profileOk = await refetch();
       if (!profileOk) {
-        setError(
-          'Signed in, but the app could not load your profile (API error or session). Refresh the page or try again.',
-        );
+        setError(t('auth.signedInNoProfile'));
         return;
       }
       navigate('/profile');
@@ -110,15 +110,10 @@ export default function Login() {
       const code = ax?.code;
       if (code === 'ERR_NETWORK' || ax?.message === 'Network Error') {
         const h = window.location.hostname;
-        const stagingHint =
-          'Use https://staging.dolli.space (not http://). Confirm requests go to the same host for /api.';
-        const prodHint =
-          'Use https://dolli.space or https://www.dolli.space (not http://). Confirm requests go to https://api.dolli.space.';
-        setError(
-          `Network error: often CORS or wrong protocol. ${h.includes('staging') ? stagingHint : prodHint} Check DevTools → Network for the failing OPTIONS/POST.`,
-        );
+        const hint = h.includes('staging') ? t('auth.hintStaging') : t('auth.hintProd');
+        setError(t('auth.networkError', { hint }));
       } else {
-        setError(typeof detail === 'string' ? detail : ax?.message || 'Login failed');
+        setError(typeof detail === 'string' ? detail : ax?.message || t('auth.loginFailed'));
       }
     } finally {
       setLoading(false);
@@ -129,15 +124,19 @@ export default function Login() {
     opts?.google_oidc || opts?.tiktok || opts?.meta_facebook || opts?.local_demo_redirect;
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <AuthChrome />
-      <div className="flex flex-1 items-center justify-center px-4 py-10 sm:py-14">
-        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#13131A]/80 p-6 shadow-2xl shadow-black/40 backdrop-blur sm:p-8">
-        <h1 className="text-2xl font-bold mb-1">{isRegister ? 'Create account' : 'Sign in'}</h1>
-        <p className="text-slate-400 text-sm mb-6">
-          {isRegister
-            ? 'Use Google, TikTok, or Facebook — we create your Dolli profile on first sign-in.'
-            : 'Continue with a social account, or use email if your server enables it.'}
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex flex-1 items-center justify-center px-4 py-10 outline-none sm:py-14"
+      >
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card/80 p-6 shadow-2xl shadow-black/40 backdrop-blur sm:p-8">
+        <h1 className="text-2xl font-bold mb-1">
+          {isRegister ? t('auth.createAccount') : t('auth.signIn')}
+        </h1>
+        <p className="text-muted-foreground text-sm mb-6">
+          {isRegister ? t('auth.registerBlurb') : t('auth.loginBlurb')}
         </p>
 
         {optsLoading ? (
@@ -147,42 +146,37 @@ export default function Login() {
         ) : (
           <>
             {!opts || (!anySocial && !opts.password) ? (
-              <p className="text-amber-200/90 text-sm mb-4">
-                No sign-in methods are enabled on this server yet. Ask the operator to configure{' '}
-                <code className="text-xs bg-black/40 px-1 rounded">OIDC_*</code> (Google),{' '}
-                <code className="text-xs bg-black/40 px-1 rounded">TIKTOK_*</code>,{' '}
-                <code className="text-xs bg-black/40 px-1 rounded">META_*</code>, or password login in the backend env.
-              </p>
+              <p className="mb-4 text-sm text-amber-900 dark:text-amber-200/90">{t('auth.noMethods')}</p>
             ) : (
               <div className="space-y-3 mb-6">
                 {opts.google_oidc ? (
                   <SocialButton
-                    label="Continue with Google"
-                    sub="Recommended — OpenID Connect"
+                    label={t('auth.continueGoogle')}
+                    sub={t('auth.subGoogle')}
                     icon={GoogleGlyph}
                     onClick={() => authApi.startGoogleOidc()}
                   />
                 ) : null}
                 {opts.tiktok ? (
                   <SocialButton
-                    label="Continue with TikTok"
-                    sub="TikTok Login Kit"
+                    label={t('auth.continueTiktok')}
+                    sub={t('auth.subTiktok')}
                     icon={TikTokGlyph}
                     onClick={() => authApi.startTikTok()}
                   />
                 ) : null}
                 {opts.meta_facebook ? (
                   <SocialButton
-                    label="Continue with Facebook"
-                    sub="Same Meta account used for Instagram apps"
+                    label={t('auth.continueFacebook')}
+                    sub={t('auth.subFacebook')}
                     icon={MetaGlyph}
                     onClick={() => authApi.startMetaFacebook()}
                   />
                 ) : null}
                 {opts.local_demo_redirect && !opts.google_oidc ? (
                   <SocialButton
-                    label="Demo session (dev)"
-                    sub="Uses ALLOW_LOCAL_AUTH — not for production"
+                    label={t('auth.demoSession')}
+                    sub={t('auth.subDemo')}
                     icon={<span className="text-lg">⚡</span>}
                     onClick={() => authApi.startGoogleOidc()}
                   />
@@ -193,23 +187,23 @@ export default function Login() {
             {opts?.password ? (
               <>
                 <div className="flex items-center gap-3 my-6">
-                  <div className="h-px flex-1 bg-white/10" />
-                  <span className="text-xs text-slate-500 uppercase tracking-wider">or email</span>
-                  <div className="h-px flex-1 bg-white/10" />
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider">{t('auth.orEmail')}</span>
+                  <div className="h-px flex-1 bg-border" />
                 </div>
                 <form onSubmit={onSubmit} className="space-y-4">
                   <input
-                    className="w-full rounded-xl bg-black/30 border border-white/10 px-4 py-3 outline-none focus:border-violet-500 text-sm"
+                    className="w-full rounded-xl border border-border bg-muted px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-violet-500"
                     type="email"
-                    placeholder="Email"
+                    placeholder={t('auth.email')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
                   />
                   <input
-                    className="w-full rounded-xl bg-black/30 border border-white/10 px-4 py-3 outline-none focus:border-violet-500 text-sm"
+                    className="w-full rounded-xl border border-border bg-muted px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-violet-500"
                     type="password"
-                    placeholder="Password"
+                    placeholder={t('auth.password')}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -218,32 +212,29 @@ export default function Login() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 py-3 font-semibold disabled:opacity-60 text-sm"
+                    className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 py-3 text-sm font-semibold text-white disabled:opacity-60"
                   >
-                    {loading ? 'Signing in...' : isRegister ? 'Sign up with email' : 'Sign in with email'}
+                    {loading ? t('auth.signingIn') : isRegister ? t('auth.signUpEmail') : t('auth.signInEmail')}
                   </button>
                 </form>
               </>
             ) : null}
 
-            <p className="text-xs text-slate-500 mt-6 text-center leading-relaxed">
-              By continuing you agree to our terms. Social logins may use a placeholder email for TikTok/Meta when the
-              provider does not share one — you can still receive payouts using verified profile details later.
-            </p>
+            <p className="text-xs text-muted-foreground mt-6 text-center leading-relaxed">{t('auth.termsBlurb')}</p>
 
-            <div className="mt-6 text-center text-sm text-slate-400">
+            <div className="mt-6 text-center text-sm text-muted-foreground">
               {isRegister ? (
                 <>
-                  Already have an account?{' '}
-                  <Link to="/login" className="text-violet-400 hover:text-violet-300 font-medium">
-                    Sign in
+                  {t('auth.alreadyHave')}{' '}
+                  <Link to="/login" className="font-medium text-violet-700 hover:text-violet-600 dark:text-violet-400 dark:hover:text-violet-300">
+                    {t('auth.signIn')}
                   </Link>
                 </>
               ) : (
                 <>
-                  New here?{' '}
-                  <Link to="/register" className="text-violet-400 hover:text-violet-300 font-medium">
-                    Create account
+                  {t('auth.newHere')}{' '}
+                  <Link to="/register" className="font-medium text-violet-700 hover:text-violet-600 dark:text-violet-400 dark:hover:text-violet-300">
+                    {t('auth.createAccount')}
                   </Link>
                 </>
               )}
@@ -251,7 +242,7 @@ export default function Login() {
           </>
         )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

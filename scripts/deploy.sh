@@ -117,6 +117,7 @@ curl -sSI -X OPTIONS "${API_URL}/api/v1/auth/local-login" \
   -H "Access-Control-Request-Method: POST" \
   -H "Access-Control-Request-Headers: content-type" | sed -n '1,25p' || true
 
+# Staging-only: rich campaign set for manual QA / UI review (see scripts/seed_demo_campaigns.py).
 if [ "${TARGET}" = "staging" ]; then
   echo "===> Demo scenario campaigns (idempotent; DATABASE_URL already exported)"
   cd ${REMOTE_APP}

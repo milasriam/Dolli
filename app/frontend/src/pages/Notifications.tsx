@@ -59,25 +59,33 @@ export default function Notifications() {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+      <div className="flex min-h-screen flex-col bg-background text-foreground">
         <Header />
-        <div className="mx-auto w-full max-w-lg flex-1 px-4 pb-16 pt-28 text-center">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-lg flex-1 px-4 pb-16 pt-28 text-center outline-none"
+        >
           <Bell className="w-12 h-12 mx-auto text-violet-400 mb-4" />
           <h1 className="text-2xl font-bold mb-2">Sign in for notifications</h1>
-          <p className="text-slate-400 mb-6 text-sm">Follow organizers and get alerts when they launch fundraisers.</p>
+          <p className="text-muted-foreground mb-6 text-sm">Follow organizers and get alerts when they launch fundraisers.</p>
           <Button onClick={() => login()} className="rounded-xl bg-violet-600 hover:bg-violet-500">
             Log in
           </Button>
-        </div>
+        </main>
         <SiteFooter />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <Header />
-      <div className="mx-auto w-full max-w-2xl flex-1 px-4 pb-20 pt-24 sm:px-6">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-2xl flex-1 px-4 pb-20 pt-24 outline-none sm:px-6"
+      >
         <PageHeader
           title="Notifications"
           description="New campaigns from people you follow"
@@ -88,7 +96,7 @@ export default function Notifications() {
                 variant="outline"
                 size="sm"
                 onClick={() => void markAll()}
-                className="shrink-0 border-white/15 text-slate-200"
+                className="shrink-0 border-border text-foreground"
               >
                 <CheckCheck className="mr-1.5 h-4 w-4" />
                 Mark all read
@@ -104,10 +112,10 @@ export default function Notifications() {
             ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-[#13131A] p-10 text-center">
-            <Bell className="w-10 h-10 mx-auto text-slate-500 mb-3" />
-            <p className="text-slate-300 font-medium mb-1">You’re all caught up</p>
-            <p className="text-sm text-slate-500">
+          <div className="rounded-2xl border border-border bg-card p-10 text-center">
+            <Bell className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+            <p className="text-muted-foreground font-medium mb-1">You’re all caught up</p>
+            <p className="text-sm text-muted-foreground">
               When someone you follow publishes a fundraiser or crosses a funding milestone (25% / 50% / 75% /
               100%), it shows up here. Open Explore → Network activity to see gifts and shares from people you follow.
             </p>
@@ -118,11 +126,11 @@ export default function Notifications() {
               <li key={n.id}>
                 <div
                   className={`rounded-xl border px-4 py-3 transition-colors ${
-                    n.read_at ? 'border-white/5 bg-[#13131A]/60' : 'border-violet-500/25 bg-violet-500/5'
+                    n.read_at ? 'border-border bg-card/60' : 'border-violet-500/25 bg-violet-500/5'
                   }`}
                 >
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">{n.title}</p>
-                  {n.body && <p className="text-sm text-slate-200 mb-2 line-clamp-2">{n.body}</p>}
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">{n.title}</p>
+                  {n.body && <p className="text-sm text-foreground mb-2 line-clamp-2">{n.body}</p>}
                   <div className="flex flex-wrap items-center gap-2">
                     {n.campaign_id != null && (
                       <Link
@@ -137,7 +145,7 @@ export default function Notifications() {
                       <button
                         type="button"
                         onClick={() => void markOneRead(n)}
-                        className="text-xs text-slate-500 hover:text-slate-300 underline-offset-2 hover:underline"
+                        className="text-xs text-muted-foreground hover:text-muted-foreground underline-offset-2 hover:underline"
                       >
                         Mark read
                       </button>
@@ -148,7 +156,7 @@ export default function Notifications() {
             ))}
           </ul>
         )}
-      </div>
+      </main>
       <SiteFooter />
     </div>
   );
