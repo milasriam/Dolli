@@ -14,11 +14,13 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 group">
+          <Link to="/" className="flex items-center gap-3 group" aria-label="Dolli home">
             <img
               src="/brand/dolli-mark.svg"
-              alt="Dolli"
-              className="h-9 w-auto drop-shadow-[0_0_12px_rgba(59,130,246,0.35)] group-hover:opacity-90 transition-opacity"
+              alt=""
+              width={36}
+              height={36}
+              className="h-9 w-9 shrink-0 drop-shadow-[0_0_14px_rgba(139,92,246,0.45)] group-hover:opacity-90 transition-opacity"
             />
             <span className="text-xl font-bold text-white tracking-tight">
               Dolli
