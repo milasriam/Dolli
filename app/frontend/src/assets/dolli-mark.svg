@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-labelledby="dolliMarkTitle">
+  <title id="dolliMarkTitle">Dolli</title>
+  <defs>
+    <linearGradient id="dolli-brand" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A78BFA"/>
+      <stop offset="0.45" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#F472B6"/>
+    </linearGradient>
+  </defs>
+  <path
+    fill="url(#dolli-brand)"
+    fill-rule="evenodd"
+    d="M 5 4 L 5 28 L 12 28 C 21 28 27 23 27 16 C 27 9 21 4 12 4 L 5 4 Z
+       M 9 8 L 9 24 L 12 24 C 18 24 22 20.5 22 16 C 22 11.5 18 8 12 8 L 9 8 Z"
+  />
+  <circle cx="26" cy="9" r="3.25" fill="#06D6A0"/>
+</svg>
