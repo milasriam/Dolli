@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import logging
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
@@ -11,6 +12,33 @@ from jose import JWTError, jwt
 from jose.exceptions import ExpiredSignatureError, JWSSignatureError, JWTClaimsError
 
 logger = logging.getLogger(__name__)
+
+
+def _issuer_lower() -> str:
+    try:
+        v = (settings.oidc_issuer_url or "").strip().lower()
+        if v:
+            return v
+    except AttributeError:
+        pass
+    return (os.environ.get("OIDC_ISSUER_URL") or "").strip().lower()
+
+
+def is_google_oidc_issuer() -> bool:
+    """Google uses different authorize/token/JWKS URLs than the generic {issuer}/authorize pattern."""
+    return "accounts.google.com" in _issuer_lower()
+
+
+def oidc_token_endpoint() -> str:
+    if is_google_oidc_issuer():
+        return "https://oauth2.googleapis.com/token"
+    try:
+        base = (settings.oidc_issuer_url or "").strip().rstrip("/")
+    except AttributeError:
+        base = ""
+    if not base:
+        base = (os.environ.get("OIDC_ISSUER_URL") or "").strip().rstrip("/")
+    return f"{base}/token"
 
 
 def generate_state() -> str:
@@ -36,7 +64,14 @@ def generate_code_challenge(code_verifier: str) -> str:
 
 async def get_jwks() -> Dict[str, Any]:
     """Get JWKS (JSON Web Key Set) from OIDC provider."""
-    jwks_url = f"{settings.oidc_issuer_url}/.well-known/jwks.json"
+    if is_google_oidc_issuer():
+        jwks_url = "https://www.googleapis.com/oauth2/v3/certs"
+    else:
+        try:
+            iss = (settings.oidc_issuer_url or "").strip().rstrip("/")
+        except AttributeError:
+            iss = (os.environ.get("OIDC_ISSUER_URL") or "").strip().rstrip("/")
+        jwks_url = f"{iss}/.well-known/jwks.json"
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             logger.info(f"Fetching JWKS from: {jwks_url}")
@@ -123,8 +158,24 @@ def decode_access_token(token: str) -> Dict[str, Any]:
         raise AccessTokenError("Invalid authentication token") from exc
 
 
-async def validate_id_token(id_token: str) -> Optional[Dict[str, Any]]:
-    """Validate ID token with proper JWT signature verification using JWKS."""
+def _oidc_issuer_for_decode() -> str:
+    """Issuer string for jwt.decode (must match ID token `iss`, incl. Google)."""
+    try:
+        v = (settings.oidc_issuer_url or "").strip().rstrip("/")
+    except AttributeError:
+        v = ""
+    if not v:
+        v = (os.environ.get("OIDC_ISSUER_URL") or "").strip().rstrip("/")
+    return v
+
+
+async def validate_id_token(id_token: str, access_token: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Validate ID token with proper JWT signature verification using JWKS.
+
+    Google (and others) may include ``at_hash`` on the ID token when an access token is issued.
+    python-jose verifies ``at_hash`` by default and requires ``access_token`` — without it,
+    validation fails with a generic JWTClaimsError ("Token claims validation failed" in our router).
+    """
     try:
         # Get the header to find the key ID
         header = jwt.get_unverified_header(id_token)
@@ -188,12 +239,22 @@ async def validate_id_token(id_token: str) -> Optional[Dict[str, Any]]:
 
         # Verify and decode the JWT
         try:
+            issuer = _oidc_issuer_for_decode()
+            try:
+                client_id = settings.oidc_client_id
+            except AttributeError:
+                client_id = os.environ.get("OIDC_CLIENT_ID", "")
+            decode_options: Dict[str, Any] = {"leeway": 120}
+            if not access_token:
+                decode_options["verify_at_hash"] = False
             payload = jwt.decode(
                 id_token,
                 pem_key,
                 algorithms=["RS256"],
-                issuer=settings.oidc_issuer_url,
-                audience=settings.oidc_client_id,
+                audience=client_id,
+                issuer=issuer,
+                access_token=access_token,
+                options=decode_options,
             )
             # Log user hash instead of actual user ID to avoid exposing sensitive information
             user_id = payload.get("sub", "unknown")
@@ -207,14 +268,19 @@ async def validate_id_token(id_token: str) -> Optional[Dict[str, Any]]:
             logger.error("JWT validation failed: Invalid JWT signature")
             raise IDTokenValidationError("Token signature verification failed", "invalid_signature")
         except JWTClaimsError as e:
-            # JWTClaimsError covers issuer, audience, and other claims validation
-            logger.error(f"JWT validation failed: Claims validation error: {e}")
-            if "iss" in str(e).lower() or "issuer" in str(e).lower():
+            # JWTClaimsError covers issuer, audience, at_hash, nbf, etc.
+            err = str(e).lower()
+            logger.error("JWT validation failed: Claims validation error: %s", e)
+            if "iss" in err or "issuer" in err:
                 raise IDTokenValidationError("Token issuer validation failed", "invalid_issuer")
-            elif "aud" in str(e).lower() or "audience" in str(e).lower():
+            if "aud" in err or "audience" in err:
                 raise IDTokenValidationError("Token audience validation failed", "invalid_audience")
-            else:
-                raise IDTokenValidationError("Token claims validation failed", "invalid_claims")
+            if "at_hash" in err or "access_token" in err:
+                raise IDTokenValidationError(
+                    "Token binding validation failed (ID token vs access token)",
+                    "invalid_at_hash",
+                )
+            raise IDTokenValidationError("Token claims validation failed", "invalid_claims")
 
     except IDTokenValidationError:
         # Re-raise our custom exceptions
@@ -250,7 +316,16 @@ def build_authorization_url(
         params["code_challenge"] = code_challenge
         params["code_challenge_method"] = "S256"
 
-    auth_url = f"{settings.oidc_issuer_url}/authorize?" + urllib.parse.urlencode(params)
+    if is_google_oidc_issuer():
+        auth_base = "https://accounts.google.com/o/oauth2/v2/auth"
+    else:
+        try:
+            iss = (settings.oidc_issuer_url or "").strip().rstrip("/")
+        except AttributeError:
+            iss = (os.environ.get("OIDC_ISSUER_URL") or "").strip().rstrip("/")
+        auth_base = f"{iss}/authorize"
+
+    auth_url = auth_base + "?" + urllib.parse.urlencode(params)
     return auth_url
 
 
