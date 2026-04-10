@@ -52,9 +52,15 @@ def _infer_dolli_cors_channel() -> str:
 def _dolli_cors_fallback_origins(channel: str) -> list[str]:
     """Per-channel defaults so staging API does not accept prod Origin and vice versa."""
     if channel == "staging":
-        return ["https://staging.dolli.space"]
+        # Include http:// so login works if the SPA is opened without TLS (nginx should redirect to https).
+        return ["https://staging.dolli.space", "http://staging.dolli.space"]
     if channel == "prod":
-        return ["https://dolli.space", "https://www.dolli.space"]
+        return [
+            "https://dolli.space",
+            "https://www.dolli.space",
+            "http://dolli.space",
+            "http://www.dolli.space",
+        ]
     return [
         "https://dolli.space",
         "https://www.dolli.space",

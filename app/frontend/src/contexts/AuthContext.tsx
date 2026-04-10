@@ -21,7 +21,7 @@ interface AuthContextType {
   error: string | null;
   login: () => Promise<void>;
   logout: () => Promise<void>;
-  refetch: () => Promise<void>;
+  refetch: () => Promise<boolean>;
   isAdmin: boolean;
 }
 
@@ -34,7 +34,7 @@ const fallbackAuth: AuthContextType = {
   error: null,
   login: async () => {},
   logout: async () => {},
-  refetch: async () => {},
+  refetch: async () => false,
   isAdmin: false,
 };
 
@@ -56,15 +56,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const checkAuthStatus = async () => {
+  const checkAuthStatus = async (): Promise<boolean> => {
     try {
       setLoading(true);
       setError(null);
       const userData = await authApi.getCurrentUser();
       setUser(userData);
+      return userData != null;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       setUser(null);
+      return false;
     } finally {
       setLoading(false);
     }

@@ -1,0 +1,22 @@
+---
+description: After code fixes, remind deploy commands or run deploy when appropriate
+alwaysApply: true
+---
+
+# Deploy after substantive changes
+
+When you change code that affects **staging or production** (backend, frontend, `scripts/deploy.sh`, nginx-related docs are not enough — only if user edits server config in repo), do **one** of the following before ending the turn:
+
+1. **Run deploy** from repo root (preferred when network/SSH is available and the user did not say to skip deploy):
+   - Staging: `./scripts/deploy.sh staging`
+   - Production: `./scripts/deploy.sh prod`
+   Use `required_permissions: ["network"]` or `["all"]` if the sandbox blocks SSH/rsync.
+
+2. If deploy cannot be run (no network, SSH failure, ambiguous target env), **give explicit copy-paste instructions** in the same message:
+   - `cd` to project root
+   - exact `./scripts/deploy.sh staging` or `prod`
+   - note that **git push alone does not deploy**; the script pushes to the VPS.
+
+Default to **staging** when the work was clearly staging/auth/CORS unless the user asked for prod.
+
+Do not run **prod** deploy without explicit user confirmation in that conversation.

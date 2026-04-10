@@ -84,7 +84,7 @@ VITE_FRONTEND_URL=https://dolli.space
 FRONTEND_URL=https://staging.dolli.space
 BACKEND_PUBLIC_URL=https://api-staging.dolli.space
 PYTHON_BACKEND_URL=https://api-staging.dolli.space
-ALLOWED_ORIGINS=https://staging.dolli.space
+ALLOWED_ORIGINS=https://staging.dolli.space,http://staging.dolli.space
 ALLOWED_DOMAINS=staging.dolli.space,api-staging.dolli.space
 ```
 
@@ -94,7 +94,7 @@ ALLOWED_DOMAINS=staging.dolli.space,api-staging.dolli.space
 FRONTEND_URL=https://dolli.space
 BACKEND_PUBLIC_URL=https://api.dolli.space
 PYTHON_BACKEND_URL=https://api.dolli.space
-ALLOWED_ORIGINS=https://dolli.space
+ALLOWED_ORIGINS=https://dolli.space,https://www.dolli.space,http://dolli.space,http://www.dolli.space
 ALLOWED_DOMAINS=dolli.space,api.dolli.space
 ```
 

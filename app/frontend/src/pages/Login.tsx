@@ -1,9 +1,11 @@
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { refetch } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,13 +17,27 @@ export default function Login() {
     setLoading(true);
     try {
       await authApi.localLogin(email.trim(), password);
+      // AuthProvider only runs checkAuthStatus on mount; SPA navigate does not remount it,
+      // so we must refetch or the app stays "logged out" until a full page reload.
+      const profileOk = await refetch();
+      if (!profileOk) {
+        setError(
+          'Signed in, but the app could not load your profile (API error or session). Refresh the page or try again.',
+        );
+        return;
+      }
       navigate('/profile');
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
       const code = err?.code;
       if (code === 'ERR_NETWORK' || err?.message === 'Network Error') {
+        const h = window.location.hostname;
+        const stagingHint =
+          'Use https://staging.dolli.space (not http://). Confirm requests go to https://api-staging.dolli.space.';
+        const prodHint =
+          'Use https://dolli.space or https://www.dolli.space (not http://). Confirm requests go to https://api.dolli.space.';
         setError(
-          'Network error: browser could not reach the API (check CORS, HTTPS, or API URL). Open DevTools → Network for the failing request.',
+          `Network error: often CORS or wrong protocol. ${h.includes('staging') ? stagingHint : prodHint} Check DevTools → Network for the failing OPTIONS/POST.`,
         );
       } else {
         setError(

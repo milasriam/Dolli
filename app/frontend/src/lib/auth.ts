@@ -35,29 +35,69 @@ class RPApi {
     const token = this.getStoredToken();
     if (!token) return null;
 
+    const url = `${this.getBaseURL()}/api/v1/auth/me`;
+    let res: Response;
     try {
-      const response = await this.client.get(`${this.getBaseURL()}/api/v1/auth/me`, {
+      res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
+        credentials: 'omit',
       });
-      return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 401) {
-        this.clearStoredToken();
-        return null;
-      }
-      throw new Error(error.response?.data?.detail || 'Failed to get user info');
+    } catch {
+      throw new Error('Failed to get user info');
     }
+
+    if (res.status === 401) {
+      this.clearStoredToken();
+      return null;
+    }
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const detail =
+        typeof (data as { detail?: unknown }).detail === 'string'
+          ? (data as { detail: string }).detail
+          : 'Failed to get user info';
+      throw new Error(detail);
+    }
+
+    return res.json();
   }
 
   async localLogin(email: string, password: string) {
-    const response = await this.client.post(`${this.getBaseURL()}/api/v1/auth/local-login`, {
-      email,
-      password,
-    });
-    const token = response.data?.token;
+    const url = `${this.getBaseURL()}/api/v1/auth/local-login`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+        credentials: 'omit',
+      });
+    } catch {
+      const err = new Error('Network Error') as Error & { code?: string };
+      err.code = 'ERR_NETWORK';
+      throw err;
+    }
+
+    const data = (await res.json().catch(() => ({}))) as {
+      token?: string;
+      detail?: string;
+    };
+
+    if (!res.ok) {
+      const msg =
+        typeof data.detail === 'string' ? data.detail : 'Login failed';
+      const e = new Error(msg) as Error & {
+        response?: { status: number; data: unknown };
+      };
+      e.response = { status: res.status, data: data as Record<string, unknown> };
+      throw e;
+    }
+
+    const token = data?.token;
     if (!token) throw new Error('Login token is missing');
     this.setStoredToken(token);
-    return response.data;
+    return data;
   }
 
   async login() {
