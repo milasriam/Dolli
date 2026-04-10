@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 from typing import Optional
@@ -12,6 +13,7 @@ from core.auth import (
     generate_code_verifier,
     generate_nonce,
     generate_state,
+    oidc_token_endpoint,
     validate_id_token,
 )
 from core.config import settings
@@ -23,11 +25,20 @@ from fastapi.responses import RedirectResponse
 from models.auth import User
 from schemas.auth import (
     AdminSetUserOrganizationRequest,
+    LoginOptionsResponse,
     PlatformTokenExchangeRequest,
     TokenExchangeResponse,
     UserResponse,
 )
 from services.auth import AuthService
+from services.social_login import (
+    build_meta_authorize_url,
+    build_tiktok_authorize_url,
+    meta_configured,
+    meta_exchange_and_profile,
+    tiktok_configured,
+    tiktok_exchange_and_profile,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -88,6 +99,37 @@ def is_oidc_configured() -> bool:
     """Validate required OIDC settings exist and are non-empty."""
     required = ("oidc_issuer_url", "oidc_client_id", "oidc_client_secret", "oidc_scope")
     return all(_has_non_empty_setting(field) for field in required)
+
+
+def _redirect_with_app_token(frontend_base: str, app_token: str, expires_at) -> RedirectResponse:
+    fragment = urlencode(
+        {
+            "token": app_token,
+            "expires_at": int(expires_at.timestamp()),
+            "token_type": "Bearer",
+        }
+    )
+    return RedirectResponse(
+        url=f"{frontend_base}/auth/callback?{fragment}",
+        status_code=status.HTTP_302_FOUND,
+    )
+
+
+@router.get("/login-options", response_model=LoginOptionsResponse)
+async def login_options():
+    """Public: which OAuth / password methods are enabled (no secrets)."""
+    allow_pw = os.environ.get("ALLOW_PASSWORD_AUTH", "").lower() in ("1", "true", "yes")
+    pw_ok = allow_pw and bool(
+        os.environ.get("LOCAL_LOGIN_EMAIL", "").strip() and os.environ.get("LOCAL_LOGIN_PASSWORD", "")
+    )
+    allow_local = os.environ.get("ALLOW_LOCAL_AUTH", "").lower() in ("1", "true", "yes")
+    return LoginOptionsResponse(
+        google_oidc=is_oidc_configured(),
+        tiktok=tiktok_configured(),
+        meta_facebook=meta_configured(),
+        password=pw_ok,
+        local_demo_redirect=allow_local and not is_oidc_configured(),
+    )
 
 
 def get_frontend_redirect_base(request: Request) -> str:
@@ -219,7 +261,7 @@ async def callback(
         if code_verifier:
             token_data["code_verifier"] = code_verifier
 
-        token_url = f"{settings.oidc_issuer_url}/token"
+        token_url = oidc_token_endpoint()
         try:
             async with httpx.AsyncClient() as client:
                 token_response = await client.post(
@@ -263,24 +305,21 @@ async def callback(
         name = id_claims.get("name") or derive_name_from_email(email)
         user = await auth_service.get_or_create_user(platform_sub=id_claims["sub"], email=email, name=name)
 
+        # Same human as LOCAL_LOGIN_* can still be a different DB row (Google `sub` vs owner-user id).
+        # Optional: grant admin to specific emails on OIDC login (comma-separated, case-insensitive).
+        admin_csv = os.environ.get("OIDC_ADMIN_EMAILS", "").strip()
+        if admin_csv:
+            allowed = {e.strip().lower() for e in admin_csv.split(",") if e.strip()}
+            if (email or "").strip().lower() in allowed and user.role != "admin":
+                user.role = "admin"
+                await auth_service.db.commit()
+                await auth_service.db.refresh(user)
+
         # Issue application JWT token encapsulating user information
         app_token, expires_at, _ = await auth_service.issue_app_token(user=user)
 
-        fragment = urlencode(
-            {
-                "token": app_token,
-                "expires_at": int(expires_at.timestamp()),
-                "token_type": "Bearer",
-            }
-        )
-
-        redirect_url = f"{frontend_base}/auth/callback?{fragment}"
-        logger.info("[callback] OIDC callback successful, redirecting to %s", redirect_url)
-        redirect_response = RedirectResponse(
-            url=redirect_url,
-            status_code=status.HTTP_302_FOUND,
-        )
-        return redirect_response
+        logger.info("[callback] OIDC callback successful, redirecting to frontend auth/callback")
+        return _redirect_with_app_token(frontend_base, app_token, expires_at)
 
     except IDTokenValidationError as e:
         # Redirect to error page with validation details
@@ -424,6 +463,126 @@ async def logout():
     """Logout user."""
     logout_url = build_logout_url()
     return {"redirect_url": logout_url}
+
+
+@router.get("/social/tiktok/login")
+async def tiktok_oauth_start(request: Request, db: AsyncSession = Depends(get_db)):
+    if not tiktok_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="TikTok login is not configured (set TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET).",
+        )
+    backend_url = get_dynamic_backend_url(request)
+    state = generate_state()
+    nonce = generate_nonce()
+    verifier = generate_code_verifier()
+    # TikTok expects SHA-256(code_verifier) as hex, not base64url (RFC 7636 S256).
+    challenge = hashlib.sha256(verifier.encode("utf-8")).hexdigest()
+    auth_service = AuthService(db)
+    await auth_service.store_oidc_state(state, nonce, verifier)
+    redirect_uri = f"{backend_url}/api/v1/auth/social/tiktok/callback"
+    url = build_tiktok_authorize_url(redirect_uri=redirect_uri, state=state, code_challenge=challenge)
+    return RedirectResponse(url, status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/social/tiktok/callback")
+async def tiktok_oauth_callback(
+    request: Request,
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    backend_url = get_dynamic_backend_url(request)
+    frontend_base = get_frontend_redirect_base(request)
+
+    def redirect_with_error(message: str) -> RedirectResponse:
+        return RedirectResponse(
+            url=f"{frontend_base}/auth/error?{urlencode({'msg': message})}",
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    if error:
+        return redirect_with_error(f"TikTok error: {error}")
+    if not code or not state:
+        return redirect_with_error("Missing code or state")
+
+    auth_service = AuthService(db)
+    temp = await auth_service.get_and_delete_oidc_state(state)
+    if not temp:
+        return redirect_with_error("Invalid or expired state")
+
+    verifier = temp.get("code_verifier") or ""
+    redirect_uri = f"{backend_url}/api/v1/auth/social/tiktok/callback"
+    try:
+        sub, email, name = await tiktok_exchange_and_profile(
+            code=code, redirect_uri=redirect_uri, code_verifier=verifier
+        )
+        user = await auth_service.get_or_create_user(platform_sub=sub, email=email, name=name)
+        app_token, expires_at, _ = await auth_service.issue_app_token(user=user)
+        return _redirect_with_app_token(frontend_base, app_token, expires_at)
+    except Exception as e:
+        logger.exception("TikTok OAuth callback failed: %s", e)
+        return redirect_with_error("TikTok sign-in failed. Try again or use another method.")
+
+
+@router.get("/social/meta/login")
+async def meta_oauth_start(request: Request, db: AsyncSession = Depends(get_db)):
+    """Facebook Login — use the same Meta developer app used for Instagram integrations."""
+    if not meta_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Meta login is not configured (set META_APP_ID and META_APP_SECRET).",
+        )
+    backend_url = get_dynamic_backend_url(request)
+    state = generate_state()
+    nonce = generate_nonce()
+    verifier = generate_code_verifier()
+    auth_service = AuthService(db)
+    await auth_service.store_oidc_state(state, nonce, verifier)
+    redirect_uri = f"{backend_url}/api/v1/auth/social/meta/callback"
+    url = build_meta_authorize_url(redirect_uri=redirect_uri, state=state)
+    return RedirectResponse(url, status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/social/meta/callback")
+async def meta_oauth_callback(
+    request: Request,
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    error_description: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    backend_url = get_dynamic_backend_url(request)
+    frontend_base = get_frontend_redirect_base(request)
+
+    def redirect_with_error(message: str) -> RedirectResponse:
+        return RedirectResponse(
+            url=f"{frontend_base}/auth/error?{urlencode({'msg': message})}",
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    if error:
+        msg = error_description or error
+        return redirect_with_error(f"Meta / Facebook error: {msg}")
+    if not code or not state:
+        return redirect_with_error("Missing code or state")
+
+    auth_service = AuthService(db)
+    temp = await auth_service.get_and_delete_oidc_state(state)
+    if not temp:
+        return redirect_with_error("Invalid or expired state")
+
+    redirect_uri = f"{backend_url}/api/v1/auth/social/meta/callback"
+    try:
+        sub, email, name = await meta_exchange_and_profile(code=code, redirect_uri=redirect_uri)
+        user = await auth_service.get_or_create_user(platform_sub=sub, email=email, name=name)
+        app_token, expires_at, _ = await auth_service.issue_app_token(user=user)
+        return _redirect_with_app_token(frontend_base, app_token, expires_at)
+    except Exception as e:
+        logger.exception("Meta OAuth callback failed: %s", e)
+        return redirect_with_error("Facebook sign-in failed. Try again or use another method.")
 
 
 class LocalLoginRequest(BaseModel):
