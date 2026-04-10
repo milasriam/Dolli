@@ -16,17 +16,19 @@ from core.auth import (
 )
 from core.config import settings
 from core.database import get_db
-from dependencies.auth import get_current_user
+from dependencies.auth import get_admin_user, get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from fastapi.responses import RedirectResponse
 from models.auth import User
 from schemas.auth import (
+    AdminSetUserOrganizationRequest,
     PlatformTokenExchangeRequest,
     TokenExchangeResponse,
     UserResponse,
 )
 from services.auth import AuthService
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
@@ -387,6 +389,36 @@ async def get_current_user_info(current_user: UserResponse = Depends(get_current
     return current_user
 
 
+@router.put("/admin/users/{user_id}/organization", response_model=UserResponse)
+async def admin_set_user_organization(
+    user_id: str,
+    body: AdminSetUserOrganizationRequest,
+    _: UserResponse = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin-only: grant or revoke verified-organization status (NPO/NGO-style accounts)."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if body.organization_verified:
+        row.organization_verified = True
+        row.account_type = "verified_organization"
+        name = (body.organization_display_name or "").strip()
+        row.organization_display_name = name or None
+        row.platform_fee_bps = body.platform_fee_bps
+    else:
+        row.organization_verified = False
+        row.account_type = "individual"
+        row.organization_display_name = None
+        row.platform_fee_bps = None
+
+    await db.commit()
+    await db.refresh(row)
+    return UserResponse.model_validate(row)
+
+
 @router.get("/logout")
 async def logout():
     """Logout user."""
@@ -431,6 +463,7 @@ async def local_login(
     )
     user.role = os.environ.get("LOCAL_LOGIN_USER_ROLE", "admin")
     await db.commit()
+    await db.refresh(user)
 
     app_token, _, _ = await auth_service.issue_app_token(user=user)
     return TokenExchangeResponse(token=app_token)

@@ -14,6 +14,7 @@ import Profile from './pages/Profile';
 import CreateCampaign from './pages/CreateCampaign';
 import AdminDashboard from './pages/AdminDashboard';
 import NotFound from './pages/NotFound';
+import { PwaInstallBanner } from './components/PwaInstallBanner';
 
 const queryClient = new QueryClient();
 
@@ -22,12 +23,14 @@ const App = () => (
     <AuthProvider>
       <TooltipProvider>
         <Toaster />
+        <PwaInstallBanner />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/auth/error" element={<AuthError />} />
+            <Route path="/campaign/:id/edit" element={<CreateCampaign />} />
             <Route path="/campaign/:id" element={<CampaignDetail />} />
             <Route path="/donation-success" element={<DonationSuccess />} />
             <Route path="/explore" element={<Explore />} />

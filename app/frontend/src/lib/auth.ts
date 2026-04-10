@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import { refreshWebSdkClient } from './api';
 import { getAPIBaseURL } from './config';
 
 const AUTH_TOKEN_KEY = 'dolli_auth_token';
@@ -25,10 +26,13 @@ class RPApi {
 
   setStoredToken(token: string) {
     window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+    refreshWebSdkClient();
   }
 
   clearStoredToken() {
     window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    window.localStorage.removeItem('token');
+    refreshWebSdkClient();
   }
 
   async getCurrentUser() {
@@ -60,6 +64,28 @@ class RPApi {
       throw new Error(detail);
     }
 
+    return res.json();
+  }
+
+  async updateProfile(body: { name?: string; nsfw_filter_enabled?: boolean }) {
+    const token = this.getStoredToken();
+    if (!token) throw new Error('Not authenticated');
+    const url = `${this.getBaseURL()}/api/v1/users/profile`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      credentials: 'omit',
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { detail?: unknown };
+      const detail =
+        typeof data.detail === 'string' ? data.detail : 'Failed to update profile';
+      throw new Error(detail);
+    }
     return res.json();
   }
 

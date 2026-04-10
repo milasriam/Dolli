@@ -175,20 +175,20 @@ class DatabaseManager:
                 logger.error("Database engine not initialized")
                 raise RuntimeError("Database engine not initialized")
 
-            # logger.info("🔧 Starting table structure repair...")
-            # await self.check_and_repair_existing_tables()
-            # logger.info("🔧 Table structure repair completed")
-
             try:
                 logger.info("🔧 Starting table creation...")
                 async with self.engine.begin() as conn:
                     await conn.run_sync(Base.metadata.create_all)
-                    self._initialized = True
-                    logger.info("Tables initialized successfully")
-                    logger.debug(f"[DB_OP] Create tables completed in {time.time() - start_time:.4f}s")
-            except (UniqueViolationError, DuplicateTableError) as e:
+                # create_all does not ALTER existing tables — add missing columns for new model fields (NSFW, org, etc.)
+                logger.info("🔧 Repairing existing table columns if needed...")
+                await self.check_and_repair_existing_tables()
                 self._initialized = True
+                logger.info("Tables initialized successfully")
+                logger.debug(f"[DB_OP] Create tables completed in {time.time() - start_time:.4f}s")
+            except (UniqueViolationError, DuplicateTableError) as e:
                 logger.info(f"Duplicate table creation: {e}, ignored.")
+                await self.check_and_repair_existing_tables()
+                self._initialized = True
             except Exception as e:
                 logger.error(f"Failed to create tables: {e}")
                 raise

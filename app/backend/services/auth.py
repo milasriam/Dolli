@@ -60,12 +60,21 @@ class AuthService:
             "sub": user.id,
             "email": user.email,
             "role": user.role,
+            "account_type": getattr(user, "account_type", None) or "individual",
+            "organization_verified": bool(getattr(user, "organization_verified", False)),
         }
 
         if user.name:
             claims["name"] = user.name
         if user.last_login:
             claims["last_login"] = user.last_login.isoformat()
+        on = getattr(user, "organization_display_name", None)
+        if on:
+            claims["organization_display_name"] = on
+        fee = getattr(user, "platform_fee_bps", None)
+        if fee is not None:
+            claims["platform_fee_bps"] = int(fee)
+        claims["nsfw_filter_enabled"] = bool(getattr(user, "nsfw_filter_enabled", True))
         token = create_access_token(claims, expires_minutes=expires_minutes)
 
         return token, expires_at, claims

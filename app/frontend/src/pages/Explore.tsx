@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { client } from '@/lib/api';
+import { client, refreshWebSdkClient } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { CAMPAIGN_CATEGORIES } from '@/lib/campaignCategories';
 import Header from '@/components/Header';
 import { Search, Filter, Users, Share2, Sparkles, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -18,15 +20,12 @@ interface Campaign {
   status: string;
   urgency_level: string;
   featured: boolean;
+  is_nsfw?: boolean;
 }
 
 const categories = [
   { value: 'all', label: 'All', emoji: '🌍' },
-  { value: 'environment', label: 'Environment', emoji: '🌱' },
-  { value: 'health', label: 'Health', emoji: '❤️' },
-  { value: 'education', label: 'Education', emoji: '📚' },
-  { value: 'food', label: 'Food', emoji: '🍲' },
-  { value: 'animals', label: 'Animals', emoji: '🐾' },
+  ...CAMPAIGN_CATEGORIES.map(({ value, label, emoji }) => ({ value, label, emoji })),
 ];
 
 const urgencyBadge: Record<string, { label: string; color: string }> = {
@@ -37,6 +36,7 @@ const urgencyBadge: Record<string, { label: string; color: string }> = {
 };
 
 export default function Explore() {
+  const { user } = useAuth();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,23 +44,27 @@ export default function Explore() {
   const [sortBy, setSortBy] = useState('trending');
 
   useEffect(() => {
-    loadCampaigns();
-  }, []);
-
-  const loadCampaigns = async () => {
-    try {
-      const response = await client.entities.campaigns.query({
-        query: { status: 'active' },
-        sort: '-created_at',
-        limit: 50,
-      });
-      setCampaigns(response?.data?.items || []);
-    } catch (err) {
-      console.error('Failed to load campaigns:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    refreshWebSdkClient();
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const response = await client.entities.campaigns.query({
+          query: { status: 'active' },
+          sort: '-created_at',
+          limit: 50,
+        });
+        if (!cancelled) setCampaigns(response?.data?.items || []);
+      } catch (err) {
+        console.error('Failed to load campaigns:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.nsfw_filter_enabled]);
 
   const filtered = campaigns
     .filter((c) => {
@@ -175,10 +179,15 @@ export default function Explore() {
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#13131A] via-transparent to-transparent" />
-                    <div className="absolute top-3 left-3">
+                    <div className="absolute top-3 left-3 flex flex-wrap gap-2">
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${urgency.color}`}>
                         {urgency.label}
                       </span>
+                      {campaign.is_nsfw && (
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-500/15 text-rose-300 border-rose-500/30">
+                          Sensitive
+                        </span>
+                      )}
                     </div>
                     {campaign.featured && (
                       <div className="absolute top-3 right-3">

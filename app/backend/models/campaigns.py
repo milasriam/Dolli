@@ -17,8 +17,12 @@ class Campaigns(Base):
     share_count = Column(Integer, nullable=True, default=0, server_default='0')
     click_count = Column(Integer, nullable=True, default=0, server_default='0')
     image_url = Column(String, nullable=True)
+    gif_url = Column(String, nullable=True)
+    video_url = Column(String, nullable=True)
     status = Column(String, nullable=True, default='active', server_default='active')
     urgency_level = Column(String, nullable=True, default='medium', server_default='medium')
     featured = Column(Boolean, nullable=True, default=False, server_default='false')
     impact_statement = Column(String, nullable=True)
+    # Mature/sensitive fundraisers — hidden in lists and redacted in detail when viewer has NSFW filter on.
+    is_nsfw = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime(timezone=True), nullable=True)

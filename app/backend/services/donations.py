@@ -1,7 +1,7 @@
 import logging
 from typing import Optional, Dict, Any, List
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.donations import Donations
@@ -30,6 +30,38 @@ class DonationsService:
         except Exception as e:
             await self.db.rollback()
             logger.error(f"Error creating donations: {str(e)}")
+            raise
+
+    async def count_completed_donations_for_user(self, user_id: str) -> int:
+        """Donations with payment_status=paid and positive amount (any campaign)."""
+        try:
+            q = select(func.count(Donations.id)).where(
+                and_(
+                    Donations.user_id == user_id,
+                    Donations.payment_status == "paid",
+                    Donations.amount > 0,
+                )
+            )
+            result = await self.db.execute(q)
+            return int(result.scalar() or 0)
+        except Exception as e:
+            logger.error(f"Error counting paid donations for user {user_id}: {str(e)}")
+            raise
+
+    async def count_completed_donations_for_campaign(self, campaign_id: int) -> int:
+        """Paid donations with positive amount for this campaign (immutable once > 0)."""
+        try:
+            q = select(func.count(Donations.id)).where(
+                and_(
+                    Donations.campaign_id == campaign_id,
+                    Donations.payment_status == "paid",
+                    Donations.amount > 0,
+                )
+            )
+            result = await self.db.execute(q)
+            return int(result.scalar() or 0)
+        except Exception as e:
+            logger.error(f"Error counting paid donations for campaign {campaign_id}: {str(e)}")
             raise
 
     async def check_ownership(self, obj_id: int, user_id: str) -> bool:

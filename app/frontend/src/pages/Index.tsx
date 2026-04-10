@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { client } from '@/lib/api';
+import { client, refreshWebSdkClient } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { CAMPAIGN_CATEGORY_GRADIENTS } from '@/lib/campaignCategories';
 import Header from '@/components/Header';
 import { SiteFooter } from '@/components/SiteFooter';
 import { Heart, TrendingUp, Users, Share2, Zap, ArrowRight, Sparkles } from 'lucide-react';
@@ -19,17 +21,12 @@ interface Campaign {
   status: string;
   urgency_level: string;
   featured: boolean;
+  is_nsfw?: boolean;
 }
 
 const HERO_IMAGE = 'https://mgx-backend-cdn.metadl.com/generate/images/996472/2026-03-01/7ca7266f-afd2-4e00-8277-3b67d9410f95.png';
 
-const categoryColors: Record<string, string> = {
-  environment: 'from-emerald-500 to-green-600',
-  health: 'from-rose-500 to-pink-600',
-  education: 'from-blue-500 to-indigo-600',
-  food: 'from-amber-500 to-orange-600',
-  animals: 'from-purple-500 to-violet-600',
-};
+const categoryColors = CAMPAIGN_CATEGORY_GRADIENTS;
 
 const urgencyBadge: Record<string, { label: string; color: string }> = {
   critical: { label: '🔥 Critical', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
@@ -55,10 +52,15 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#13131A] via-transparent to-transparent" />
-        <div className="absolute top-3 left-3 flex gap-2">
+        <div className="absolute top-3 left-3 flex flex-wrap gap-2">
           <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${urgency.color}`}>
             {urgency.label}
           </span>
+          {campaign.is_nsfw && (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-500/15 text-rose-300 border-rose-500/30">
+              Sensitive
+            </span>
+          )}
         </div>
         {campaign.featured && (
           <div className="absolute top-3 right-3">
@@ -109,36 +111,42 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
 }
 
 export default function Index() {
+  const { user } = useAuth();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiSorted, setAiSorted] = useState(false);
 
   useEffect(() => {
-    loadCampaigns();
-  }, []);
-
-  const loadCampaigns = async () => {
-    try {
-      const response = await client.entities.campaigns.query({
-        query: { status: 'active' },
-        sort: '-created_at',
-        limit: 20,
-      });
-      const items = response?.data?.items || [];
-      // AI-prioritized sorting: boost by share velocity, donor count, urgency
-      const sorted = [...items].sort((a: Campaign, b: Campaign) => {
-        const scoreA = (a.share_count * 2) + (a.donor_count * 1.5) + (a.urgency_level === 'critical' ? 1000 : a.urgency_level === 'high' ? 500 : 100) + (a.featured ? 2000 : 0);
-        const scoreB = (b.share_count * 2) + (b.donor_count * 1.5) + (b.urgency_level === 'critical' ? 1000 : b.urgency_level === 'high' ? 500 : 100) + (b.featured ? 2000 : 0);
-        return scoreB - scoreA;
-      });
-      setCampaigns(sorted);
-      setAiSorted(true);
-    } catch (err) {
-      console.error('Failed to load campaigns:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    refreshWebSdkClient();
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const response = await client.entities.campaigns.query({
+          query: { status: 'active' },
+          sort: '-created_at',
+          limit: 20,
+        });
+        const items = response?.data?.items || [];
+        const sorted = [...items].sort((a: Campaign, b: Campaign) => {
+          const scoreA = (a.share_count * 2) + (a.donor_count * 1.5) + (a.urgency_level === 'critical' ? 1000 : a.urgency_level === 'high' ? 500 : 100) + (a.featured ? 2000 : 0);
+          const scoreB = (b.share_count * 2) + (b.donor_count * 1.5) + (b.urgency_level === 'critical' ? 1000 : b.urgency_level === 'high' ? 500 : 100) + (b.featured ? 2000 : 0);
+          return scoreB - scoreA;
+        });
+        if (!cancelled) {
+          setCampaigns(sorted);
+          setAiSorted(true);
+        }
+      } catch (err) {
+        console.error('Failed to load campaigns:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.nsfw_filter_enabled]);
 
   const stats = [
     { icon: Heart, label: 'Total Raised', value: '$25,640', color: 'text-pink-400' },

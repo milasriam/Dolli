@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { client } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import Header from '@/components/Header';
+import { ShareCampaignDialog } from '@/components/ShareCampaignDialog';
 import { toast } from 'sonner';
-import {
-  Heart, Share2, Trophy, Copy, CheckCircle2,
-  ExternalLink, ArrowRight,
-} from 'lucide-react';
+import { Heart, Share2, Trophy, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import confetti from 'canvas-confetti';
 
@@ -23,12 +22,13 @@ type PaymentState = 'verifying' | 'paid' | 'pending' | 'failed' | 'error';
 
 export default function DonationSuccess() {
   const [searchParams] = useSearchParams();
+  const { user, login } = useAuth();
   const invoiceId = searchParams.get('invoice_id') || searchParams.get('session_id');
   const provider = searchParams.get('provider') || 'halyk_epay';
   const campaignId = searchParams.get('campaign_id');
   const initialStatus = searchParams.get('status');
   const [campaign, setCampaign] = useState<Campaign | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<PaymentState>('verifying');
 
   useEffect(() => {
@@ -98,44 +98,8 @@ export default function DonationSuccess() {
     }
   };
 
-  const handleShare = async (platform: string) => {
-    const text = `I just donated to "${campaign?.title || 'a great cause'}" on Dolli. Join me!`;
-    const url = `${window.location.origin}/campaign/${campaignId}`;
-
-    try {
-      const response = await client.apiCall.invoke({
-        url: '/api/v1/analytics/create-referral',
-        method: 'POST',
-        data: { campaign_id: Number(campaignId), platform },
-      });
-      const shareUrl = `${window.location.origin}${response.data.share_url}`;
-
-      if (platform === 'tiktok') {
-        window.open(`https://www.tiktok.com/share?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(text)}`, '_blank');
-      } else if (platform === 'instagram') {
-        await navigator.clipboard.writeText(`${text}\n${shareUrl}`);
-        toast.success('Copied! Share on Instagram Stories or bio.');
-      } else if (platform === 'twitter') {
-        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`, '_blank');
-      } else {
-        await navigator.clipboard.writeText(shareUrl);
-        setCopied(true);
-        toast.success('Link copied!');
-        setTimeout(() => setCopied(false), 2000);
-      }
-    } catch {
-      if (platform === 'twitter') {
-        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
-      } else {
-        await navigator.clipboard.writeText(url);
-        setCopied(true);
-        toast.success('Link copied!');
-        setTimeout(() => setCopied(false), 2000);
-      }
-    }
-  };
-
   const progress = campaign ? Math.min((campaign.raised_amount / campaign.goal_amount) * 100, 100) : 0;
+  const cid = campaignId ? Number(campaignId) : NaN;
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
@@ -268,39 +232,37 @@ export default function DonationSuccess() {
 
             <div className="bg-gradient-to-br from-violet-500/10 to-pink-500/10 rounded-2xl border border-violet-500/20 p-6 text-center">
               <Share2 className="w-8 h-8 text-violet-400 mx-auto mb-3" />
-              <h3 className="text-xl font-bold mb-2">Share & Help Reach Goal Faster</h3>
+              <h3 className="text-xl font-bold mb-2">You’re part of the ripple</h3>
               <p className="text-sm text-slate-400 mb-5">
-                Every share creates a viral loop. Your friends can join with just one tap.
+                Share with a personal link (when signed in) — WhatsApp, Telegram, QR, native share, and more.
               </p>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => handleShare('tiktok')}
-                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-black border border-white/10 text-white text-sm font-medium hover:bg-white/5 transition-all"
-                >
-                  TikTok
-                </button>
-                <button
-                  onClick={() => handleShare('instagram')}
-                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium hover:from-purple-500 hover:to-pink-500 transition-all"
-                >
-                  Instagram
-                </button>
-                <button
-                  onClick={() => handleShare('twitter')}
-                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-black border border-white/10 text-white text-sm font-medium hover:bg-white/5 transition-all"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Twitter / X
-                </button>
-                <button
-                  onClick={() => handleShare('copy')}
-                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#1A1A25] border border-white/10 text-white text-sm font-medium hover:bg-white/5 transition-all"
-                >
-                  {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                  {copied ? 'Copied!' : 'Copy Link'}
-                </button>
-              </div>
+              <Button
+                type="button"
+                onClick={() => setShareOpen(true)}
+                disabled={!Number.isFinite(cid)}
+                className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 text-white font-semibold py-6 border-0 shadow-lg shadow-violet-500/20"
+              >
+                <Share2 className="w-5 h-5 mr-2" />
+                Open share studio
+              </Button>
             </div>
+
+            {Number.isFinite(cid) && (
+              <ShareCampaignDialog
+                open={shareOpen}
+                onOpenChange={setShareOpen}
+                campaignId={cid}
+                campaignTitle={campaign?.title || 'This fundraiser'}
+                campaignImageUrl={campaign?.image_url}
+                raisedAmount={campaign?.raised_amount}
+                goalAmount={campaign?.goal_amount}
+                donorCount={campaign?.donor_count}
+                context="donated"
+                isAuthenticated={!!user}
+                onRequestLogin={login}
+                afterTrackedShare={() => void loadCampaign()}
+              />
+            )}
 
             <div className="flex gap-3">
               <Link to="/explore" className="flex-1">

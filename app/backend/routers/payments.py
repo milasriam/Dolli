@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -9,6 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
+from core.nsfw_visibility import should_redact_nsfw_campaign
+from models.auth import User as AuthUser
 from models.campaigns import Campaigns
 from models.donations import Donations
 from schemas.auth import UserResponse
@@ -64,6 +67,31 @@ async def _get_campaign_or_404(db: AsyncSession, campaign_id: int) -> Campaigns:
     return campaign
 
 
+def _env_fee_bps(key: str, fallback: int) -> int:
+    raw = os.environ.get(key, str(fallback))
+    try:
+        return max(0, min(10_000, int(raw)))
+    except ValueError:
+        return fallback
+
+
+async def _organizer_platform_fee_bps(db: AsyncSession, organizer_user_id: str) -> int:
+    """Effective fee tier for the campaign owner (logged at checkout; provider split not wired yet)."""
+    result = await db.execute(select(AuthUser).where(AuthUser.id == organizer_user_id).limit(1))
+    organizer = result.scalar_one_or_none()
+    if not organizer:
+        return _env_fee_bps("PLATFORM_FEE_BPS_INDIVIDUAL", 300)
+    override = getattr(organizer, "platform_fee_bps", None)
+    if override is not None:
+        return max(0, min(10_000, int(override)))
+    is_org = bool(getattr(organizer, "organization_verified", False)) or (
+        (getattr(organizer, "account_type", None) or "") == "verified_organization"
+    )
+    if is_org:
+        return _env_fee_bps("PLATFORM_FEE_BPS_VERIFIED_ORGANIZATION", 500)
+    return _env_fee_bps("PLATFORM_FEE_BPS_INDIVIDUAL", 300)
+
+
 async def _get_donation_by_invoice(db: AsyncSession, invoice_id: str) -> Donations | None:
     result = await db.execute(select(Donations).where(Donations.provider_invoice_id == invoice_id))
     return result.scalar_one_or_none()
@@ -114,6 +142,18 @@ async def create_payment_session(
 ):
     provider = _normalize_provider(payload.provider)
     campaign = await _get_campaign_or_404(db, payload.campaign_id)
+    if should_redact_nsfw_campaign(campaign, current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="This fundraiser is marked as sensitive. Turn off the NSFW filter in your profile to donate.",
+        )
+    fee_bps = await _organizer_platform_fee_bps(db, campaign.user_id)
+    logger.info(
+        "create_payment_session campaign_id=%s organizer_id=%s platform_fee_bps=%s (checkout split not implemented)",
+        campaign.id,
+        campaign.user_id,
+        fee_bps,
+    )
 
     donation = Donations(
         user_id=str(current_user.id),

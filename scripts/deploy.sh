@@ -18,7 +18,8 @@ if [[ "$TARGET" == "prod" ]]; then
   BACKEND_SERVICE="dolli-backend-prod"
   FRONT_DIR="/opt/dolli/www/prod"
 else
-  API_URL="https://api-staging.dolli.space"
+  # Staging browser uses same-origin /api (nginx → 127.0.0.1:8001); build-time URL for any non-runtime paths.
+  API_URL="https://staging.dolli.space"
   SITE_URL="https://staging.dolli.space"
   BACKEND_SERVICE="dolli-backend-staging"
   FRONT_DIR="/opt/dolli/www/staging"
@@ -36,7 +37,7 @@ set -euo pipefail
 
 cd ${REMOTE_APP}/app/frontend
 npm install
-VITE_API_BASE_URL=${API_URL} npm run build
+VITE_API_BASE_URL=${API_URL} VITE_PAYMENTS_ENABLED=${VITE_PAYMENTS_ENABLED:-false} npm run build
 rsync -a --delete dist/ ${FRONT_DIR}/
 
 systemctl restart ${BACKEND_SERVICE}
@@ -45,7 +46,11 @@ systemctl is-active ${BACKEND_SERVICE}
 echo "=== wait for API readiness ==="
 ok=0
 for i in \$(seq 1 30); do
-  code=\$(curl -s -o /tmp/dolli_health.json -w "%{http_code}" ${API_URL}/health || true)
+  if [ "${TARGET}" = "staging" ]; then
+    code=\$(curl -s -o /tmp/dolli_health.json -w "%{http_code}" ${SITE_URL}/health || true)
+  else
+    code=\$(curl -s -o /tmp/dolli_health.json -w "%{http_code}" ${API_URL}/health || true)
+  fi
   if [ "\$code" = "200" ]; then
     ok=1
     break
@@ -60,7 +65,7 @@ if [ "\$ok" -ne 1 ]; then
   exit 1
 fi
 
-echo "=== API ==="
+echo "=== API (via public URL) ==="
 curl -sS -i ${API_URL}/health | sed -n '1,12p'
 
 echo "=== SITE ==="

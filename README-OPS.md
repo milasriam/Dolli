@@ -48,6 +48,8 @@ rsync -az --delete \
 Then on server:
 
 ```bash
+cd /opt/dolli/app/app/backend
+/opt/dolli/venv/bin/alembic upgrade head
 cd /opt/dolli/app/app/frontend
 npm install
 npm run build
@@ -87,6 +89,12 @@ fail2ban-client status sshd
 
 - Production config: `/etc/nginx/sites-available/dolli-prod.conf`
 - Staging config: `/etc/nginx/sites-available/dolli-staging.conf`
+- **Active on VPS:** `/etc/nginx/sites-enabled/dolli-multi.conf` → `sites-available/dolli-multi.conf` (prod + staging + both API hosts).
+
+### Staging SPA → API (same origin)
+
+The staging frontend calls **`https://staging.dolli.space/api/...`** (not `api-staging` in the browser). The `server_name staging.dolli.space` block must include `location /api/` (and optional `location = /health`) proxying to **`127.0.0.1:8001`**. Reference fragment: `deploy/nginx/dolli-multi-staging-api-proxy.fragment.conf`.
+
 - Active symlinks: `/etc/nginx/sites-enabled/`
 
 After any config change:
@@ -109,3 +117,27 @@ curl -I https://dolli.space
 - Backend service file: `/etc/systemd/system/dolli-backend.service`
 - Backend app directory: `/opt/dolli/app/app/backend`
 - Frontend build directory: `/opt/dolli/app/app/frontend/dist`
+- Staging env: `/etc/dolli/staging.env` (used by `dolli-backend-staging.service`)
+
+### Staging: create campaigns without donating first (QA only)
+
+To test **Create campaign** from the UI without a prior paid donation, set in `/etc/dolli/staging.env`:
+
+`ALLOW_CAMPAIGN_CREATE_WITHOUT_DONATION=true`
+
+Then `systemctl restart dolli-backend-staging`. **Do not** enable this on production — there the give-first rule stays.
+
+### Staging SQLite (avoid `readonly database` after rsync)
+
+Do **not** keep the staging SQLite file **inside** `/opt/dolli/app/...` if you deploy with `rsync --delete`: the tree is owned by your Mac uid and the DB path can become unwritable or disappear.
+
+Use a path outside the synced tree, for example:
+
+```bash
+mkdir -p /var/lib/dolli
+# In /etc/dolli/staging.env:
+DATABASE_URL=sqlite+aiosqlite:////var/lib/dolli/staging.db
+systemctl restart dolli-backend-staging
+```
+
+Schema changes (new columns): prefer `alembic upgrade head` with `DATABASE_URL` exported to match that file. If Alembic cannot parse the URL, apply `ALTER TABLE` on the SQLite file with a short Python/sqlite3 script.

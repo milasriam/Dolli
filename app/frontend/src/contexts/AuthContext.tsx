@@ -13,6 +13,12 @@ interface User {
   name?: string;
   role: string;
   last_login?: string;
+  account_type?: string;
+  organization_verified?: boolean;
+  organization_display_name?: string | null;
+  platform_fee_bps?: number | null;
+  /** When true (default), NSFW-marked campaigns are hidden in feeds and redacted on the campaign page. */
+  nsfw_filter_enabled?: boolean;
 }
 
 interface AuthContextType {

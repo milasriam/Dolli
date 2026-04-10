@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import path from 'path';
+import { VitePWA } from 'vite-plugin-pwa';
 import { viteSourceLocator } from '@metagptx/vite-plugin-source-locator';
 import { atoms } from '@metagptx/web-sdk/plugins';
 
@@ -12,6 +13,69 @@ export default defineConfig(({ mode }) => ({
     }),
     react(),
     atoms(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['brand/dolli-mark.svg', 'robots.txt', 'pwa/icon-192.png', 'pwa/icon-512.png', 'pwa/icon-512-maskable.png'],
+      manifest: {
+        id: '/',
+        name: 'Dolli — micro-donations',
+        short_name: 'Dolli',
+        description:
+          'One-tap micro-donations and fundraisers built for social — share, give, repeat.',
+        theme_color: '#0A0A0F',
+        background_color: '#0A0A0F',
+        display: 'standalone',
+        orientation: 'portrait-primary',
+        scope: '/',
+        start_url: '/?utm_source=pwa',
+        lang: 'en',
+        categories: ['finance', 'social'],
+        icons: [
+          {
+            src: 'pwa/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa/icon-512-maskable.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api\//],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-stylesheets',
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-webfonts',
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+        ],
+      },
+      devOptions: {
+        enabled: mode === 'development' && process.env.VITE_PWA_DEV === '1',
+      },
+    }),
   ],
   resolve: {
     alias: {

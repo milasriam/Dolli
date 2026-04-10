@@ -2,14 +2,18 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { client } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { authApi } from '@/lib/auth';
 import Header from '@/components/Header';
+import { OwnerCampaignControls } from '@/components/OwnerCampaignControls';
 import { toast } from 'sonner';
 import {
   Heart, Trophy, Flame, Share2, TrendingUp, User,
-  Copy, CheckCircle2, Pencil,
+  Copy, CheckCircle2, Pencil, Check, X,
   Zap, Users, Gift, Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 
 const USE_MOCK_DATA = false;
 
@@ -82,10 +86,12 @@ interface Referral {
 
 interface Campaign {
   id: number;
+  user_id?: string;
   title: string;
   category: string;
   goal_amount: number;
   raised_amount: number;
+  donor_count?: number;
   status: string;
 }
 
@@ -109,7 +115,7 @@ const INSTAGRAM_ICON = (
 );
 
 export default function Profile() {
-  const { user: authUser, login, loading: authLoading } = useAuth();
+  const { user: authUser, login, loading: authLoading, refetch } = useAuth();
   const [donations, setDonations] = useState<Donation[]>([]);
   const [badges, setBadges] = useState<Badge[]>([]);
   const [referrals, setReferrals] = useState<Referral[]>([]);
@@ -117,6 +123,10 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'activity' | 'badges' | 'referrals'>('activity');
   const [copied, setCopied] = useState(false);
+  const [nsfwSaving, setNsfwSaving] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameSaving, setNameSaving] = useState(false);
 
   const user = USE_MOCK_DATA ? MOCK_USER : authUser;
   const isLoading = USE_MOCK_DATA ? false : (authLoading || loading);
@@ -138,12 +148,17 @@ export default function Profile() {
   }, [user]);
 
   const loadData = async () => {
+    if (!user?.id) return;
     try {
       const [donationsRes, badgesRes, referralsRes, campaignsRes] = await Promise.all([
         client.entities.donations.query({ sort: '-created_at', limit: 50 }),
         client.entities.badges.query({ limit: 50 }),
         client.entities.referrals.query({ sort: '-created_at', limit: 50 }),
-        client.entities.campaigns.query({ sort: '-created_at', limit: 50 }),
+        client.entities.campaigns.query({
+          query: { user_id: user.id },
+          sort: '-created_at',
+          limit: 50,
+        }),
       ]);
       setDonations(donationsRes?.data?.items || []);
       setBadges(badgesRes?.data?.items || []);
@@ -284,15 +299,118 @@ export default function Profile() {
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center shadow-lg shadow-violet-500/25 ring-2 ring-violet-500/20 ring-offset-2 ring-offset-[#13131A]">
               <User className="w-8 h-8 text-white" />
             </div>
-            <div className="flex-1">
-              <h1 className="text-xl font-bold">{USE_MOCK_DATA ? 'Amir' : 'My Impact'}</h1>
-              <p className="text-sm text-slate-500">Tap → Share → Multiply</p>
+            <div className="flex-1 min-w-0">
+              {USE_MOCK_DATA ? (
+                <>
+                  <h1 className="text-xl font-bold">Amir</h1>
+                  <p className="text-sm text-slate-500">Tap → Share → Multiply</p>
+                </>
+              ) : editingName ? (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Input
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    placeholder="Display name"
+                    maxLength={120}
+                    className="bg-white/5 border-white/10 text-white h-10"
+                    autoFocus
+                  />
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      type="button"
+                      disabled={nameSaving}
+                      onClick={async () => {
+                        setNameSaving(true);
+                        try {
+                          const trimmed = nameDraft.trim();
+                          await authApi.updateProfile({ name: trimmed });
+                          await refetch();
+                          setEditingName(false);
+                          toast.success(trimmed ? 'Name updated' : 'Name cleared');
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : 'Could not save name');
+                        } finally {
+                          setNameSaving(false);
+                        }
+                      }}
+                      className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-300 hover:bg-emerald-500/30 transition-all disabled:opacity-50"
+                      aria-label="Save name"
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={nameSaving}
+                      onClick={() => {
+                        setEditingName(false);
+                        setNameDraft(user?.name || '');
+                      }}
+                      className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all"
+                      aria-label="Cancel"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <h1 className="text-xl font-bold truncate">
+                    {user?.name?.trim() ? user.name : 'My Impact'}
+                  </h1>
+                  <p className="text-sm text-slate-500">Tap → Share → Multiply</p>
+                </>
+              )}
             </div>
-            <button className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:border-white/20 transition-all">
-              <Pencil className="w-4 h-4" />
-            </button>
+            {!USE_MOCK_DATA && !editingName && (
+              <button
+                type="button"
+                onClick={() => {
+                  setNameDraft(user?.name || '');
+                  setEditingName(true);
+                }}
+                className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:border-white/20 transition-all shrink-0"
+                aria-label="Edit display name"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
+
+        {!USE_MOCK_DATA && (
+          <div className="bg-[#13131A] rounded-2xl border border-white/5 p-5 mb-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-white">NSFW filter</p>
+                <p className="text-xs text-slate-500 mt-1 max-w-[240px]">
+                  When on, mature or sensitive fundraisers stay out of Explore and home, and campaign pages stay
+                  blurred until you turn this off.
+                </p>
+              </div>
+              <Switch
+                checked={user?.nsfw_filter_enabled !== false}
+                disabled={nsfwSaving}
+                onCheckedChange={async (checked) => {
+                  setNsfwSaving(true);
+                  try {
+                    await authApi.updateProfile({ nsfw_filter_enabled: checked });
+                    await refetch();
+                    toast.success(
+                      checked
+                        ? 'Sensitive fundraisers stay hidden.'
+                        : 'Sensitive fundraisers may appear in feeds and full pages.',
+                    );
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : 'Could not update setting');
+                  } finally {
+                    setNsfwSaving(false);
+                  }
+                }}
+                aria-label="Hide NSFW and sensitive fundraisers"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Impact Metrics Grid */}
         <div className="grid grid-cols-2 gap-3 mb-6">
@@ -317,6 +435,43 @@ export default function Profile() {
             <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Impact Multiplied</div>
           </div>
         </div>
+
+        {!USE_MOCK_DATA && campaigns.length > 0 && (
+          <div className="bg-[#13131A] rounded-2xl border border-white/5 p-5 mb-6">
+            <h2 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-violet-400" />
+              Your campaigns
+            </h2>
+            <p className="text-xs text-slate-500 mb-4">
+              Until the first completed donation, you can move a live campaign back to drafts or delete it.
+            </p>
+            <div className="space-y-4">
+              {campaigns.map((c) => (
+                <div
+                  key={c.id}
+                  className="rounded-xl border border-white/5 bg-white/[0.02] p-3.5 space-y-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                      {(c.status || 'active').toLowerCase() === 'draft' ? 'Draft' : c.status === 'active' ? 'Live' : c.status}
+                    </span>
+                  </div>
+                  <OwnerCampaignControls
+                    campaign={{
+                      id: c.id,
+                      title: c.title,
+                      status: c.status,
+                      raised_amount: c.raised_amount,
+                      donor_count: c.donor_count,
+                    }}
+                    onChanged={loadData}
+                    layout="row"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Achievements - Streak + Badges */}
         <div className="bg-[#13131A] rounded-2xl border border-white/5 p-5 mb-6">

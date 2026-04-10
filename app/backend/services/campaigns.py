@@ -1,10 +1,14 @@
 import logging
-from typing import Optional, Dict, Any, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from sqlalchemy import select, func
+from core.nsfw_visibility import apply_nsfw_list_filter
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.campaigns import Campaigns
+
+if TYPE_CHECKING:
+    from schemas.auth import UserResponse
 
 logger = logging.getLogger(__name__)
 
@@ -40,24 +44,39 @@ class CampaignsService:
             logger.error(f"Error fetching campaigns {obj_id}: {str(e)}")
             raise
 
+    async def count_by_user_id(self, user_id: str, *, status: Optional[str] = None) -> int:
+        """How many campaigns this user has created (optionally filtered by status)."""
+        try:
+            q = select(func.count(Campaigns.id)).where(Campaigns.user_id == user_id)
+            if status is not None:
+                q = q.where(Campaigns.status == status)
+            result = await self.db.execute(q)
+            return int(result.scalar() or 0)
+        except Exception as e:
+            logger.error(f"Error counting campaigns for user {user_id}: {str(e)}")
+            raise
+
     async def get_list(
-        self, 
-        skip: int = 0, 
-        limit: int = 20, 
+        self,
+        skip: int = 0,
+        limit: int = 20,
         query_dict: Optional[Dict[str, Any]] = None,
         sort: Optional[str] = None,
+        viewer: Optional["UserResponse"] = None,
     ) -> Dict[str, Any]:
         """Get paginated list of campaignss"""
         try:
             query = select(Campaigns)
             count_query = select(func.count(Campaigns.id))
-            
+
             if query_dict:
                 for field, value in query_dict.items():
                     if hasattr(Campaigns, field):
                         query = query.where(getattr(Campaigns, field) == value)
                         count_query = count_query.where(getattr(Campaigns, field) == value)
-            
+
+            query, count_query = apply_nsfw_list_filter(query, count_query, viewer)
+
             count_result = await self.db.execute(count_query)
             total = count_result.scalar()
 

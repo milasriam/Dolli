@@ -1,7 +1,10 @@
 import { createRoot } from 'react-dom/client';
+import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
 import './index.css';
 import { loadRuntimeConfig } from './lib/config.ts';
+
+registerSW({ immediate: true });
 
 // Load runtime configuration before rendering the app
 async function initializeApp() {

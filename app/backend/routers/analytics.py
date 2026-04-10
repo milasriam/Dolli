@@ -205,6 +205,10 @@ async def create_referral(
             created_at=datetime.now(),
         )
         db.add(referral)
+        camp_result = await db.execute(select(Campaigns).where(Campaigns.id == data.campaign_id))
+        campaign = camp_result.scalar_one_or_none()
+        if campaign:
+            campaign.share_count = int(campaign.share_count or 0) + 1
         await db.commit()
 
         return ReferralResponse(
