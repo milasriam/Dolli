@@ -1,5 +1,5 @@
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
 
 from core.nsfw_visibility import apply_nsfw_list_filter
 from sqlalchemy import func, or_, select
@@ -193,4 +193,36 @@ class CampaignsService:
             return result.scalars().all()
         except Exception as e:
             logger.error(f"Error fetching campaignss by {field_name}: {str(e)}")
+            raise
+
+    async def get_following_feed(
+        self,
+        following_user_ids: Sequence[str],
+        *,
+        skip: int = 0,
+        limit: int = 24,
+        viewer: Optional["UserResponse"] = None,
+    ) -> Dict[str, Any]:
+        """Active campaigns created by any of the given user ids (for Following tab)."""
+        ids = [u for u in following_user_ids if u]
+        if not ids:
+            return {"items": [], "total": 0, "skip": skip, "limit": limit}
+        try:
+            query = select(Campaigns).where(
+                Campaigns.user_id.in_(ids),
+                Campaigns.status == "active",
+            )
+            count_query = select(func.count(Campaigns.id)).where(
+                Campaigns.user_id.in_(ids),
+                Campaigns.status == "active",
+            )
+            query, count_query = apply_nsfw_list_filter(query, count_query, viewer)
+            count_result = await self.db.execute(count_query)
+            total = int(count_result.scalar() or 0)
+            query = query.order_by(Campaigns.id.desc())
+            result = await self.db.execute(query.offset(skip).limit(limit))
+            items = result.scalars().all()
+            return {"items": items, "total": total, "skip": skip, "limit": limit}
+        except Exception as e:
+            logger.error(f"Error fetching following feed: {str(e)}")
             raise

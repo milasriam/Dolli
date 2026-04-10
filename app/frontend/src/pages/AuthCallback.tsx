@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { authApi } from '../lib/auth';
+import { AuthChrome } from '@/components/AuthChrome';
 
 export default function AuthCallback() {
   useEffect(() => {
@@ -22,10 +23,15 @@ export default function AuthCallback() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-gray-600">Processing authentication...</p>
+    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+      <AuthChrome />
+      <div className="flex flex-1 flex-col items-center justify-center px-4">
+        <div
+          className="h-12 w-12 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-400"
+          role="status"
+          aria-label="Loading"
+        />
+        <p className="mt-6 text-sm text-slate-400">Finishing sign-in…</p>
       </div>
     </div>
   );

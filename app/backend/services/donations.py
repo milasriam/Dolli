@@ -1,7 +1,7 @@
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.donations import Donations
@@ -202,3 +202,35 @@ class DonationsService:
         except Exception as e:
             logger.error(f"Error fetching donationss by {field_name}: {str(e)}")
             raise
+
+    async def early_donor_milestone_snapshot(self, user_id: str) -> Dict[str, Any]:
+        """Rank among distinct paid donors ordered by first completed gift (time, then user_id).
+
+        Tiers: 100, 1000, 10000 — ``milestone`` is the smallest threshold with ``rank <= threshold``.
+        """
+        paid = and_(Donations.payment_status == "paid", Donations.amount > 0)
+        first_at = func.min(Donations.created_at).label("fa")
+        fp = (
+            select(Donations.user_id.label("uid"), first_at)
+            .where(paid)
+            .group_by(Donations.user_id)
+            .subquery()
+        )
+        total = int(await self.db.scalar(select(func.count()).select_from(fp)) or 0)
+        first_row = await self.db.execute(select(fp.c.fa).where(fp.c.uid == user_id))
+        user_first = first_row.scalar_one_or_none()
+        if user_first is None:
+            return {"rank": None, "milestone": None, "total_distinct_donors": total}
+
+        count_before = await self.db.scalar(
+            select(func.count()).select_from(fp).where(
+                or_(fp.c.fa < user_first, and_(fp.c.fa == user_first, fp.c.uid < user_id))
+            )
+        )
+        rank = int(count_before or 0) + 1
+        milestone: Optional[int] = None
+        for threshold in (100, 1000, 10_000):
+            if rank <= threshold:
+                milestone = threshold
+                break
+        return {"rank": rank, "milestone": milestone, "total_distinct_donors": total}

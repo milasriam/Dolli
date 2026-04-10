@@ -4,6 +4,29 @@ import { getAPIBaseURL } from './config';
 
 const AUTH_TOKEN_KEY = 'dolli_auth_token';
 
+export type LoginOptions = {
+  google_oidc: boolean;
+  tiktok: boolean;
+  meta_facebook: boolean;
+  password: boolean;
+  local_demo_redirect: boolean;
+};
+
+export async function fetchLoginOptions(): Promise<LoginOptions | null> {
+  try {
+    const res = await fetch(`${getAPIBaseURL()}/api/v1/auth/login-options`);
+    if (!res.ok) return null;
+    return (await res.json()) as LoginOptions;
+  } catch {
+    return null;
+  }
+}
+
+/** Full-page redirect to backend OAuth start (avoids SPA /api CORS on redirect). */
+export function startOAuthUrl(apiPath: string): void {
+  window.location.assign(`${getAPIBaseURL()}${apiPath}`);
+}
+
 class RPApi {
   private client: AxiosInstance;
 
@@ -128,6 +151,18 @@ class RPApi {
 
   async login() {
     window.location.assign('/login');
+  }
+
+  startGoogleOidc() {
+    startOAuthUrl('/api/v1/auth/login');
+  }
+
+  startTikTok() {
+    startOAuthUrl('/api/v1/auth/social/tiktok/login');
+  }
+
+  startMetaFacebook() {
+    startOAuthUrl('/api/v1/auth/social/meta/login');
   }
 
   async logout() {

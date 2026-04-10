@@ -19,6 +19,11 @@ interface User {
   platform_fee_bps?: number | null;
   /** When true (default), NSFW-marked campaigns are hidden in feeds and redacted on the campaign page. */
   nsfw_filter_enabled?: boolean;
+  /** Admin-curated label (e.g. Early partner), from GET /auth/me. */
+  curated_badge_label?: string | null;
+  curated_badge_slug?: string | null;
+  /** Extra chrome for partners: "frame" | "featured" (reserved for paid promo). */
+  curated_highlight?: string | null;
 }
 
 interface AuthContextType {

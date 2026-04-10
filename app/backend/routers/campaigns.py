@@ -33,8 +33,13 @@ from models.user_profiles import User_profiles
 from schemas.auth import UserResponse
 from schemas.storage import FileUpDownRequest
 from services.campaigns import CampaignsService
+from services.curated_user_badges import curated_badge_for_email
 from services.donations import DonationsService
+from services.network_activity_feed import build_network_activity_feed
+from services.new_campaign_follower_side_effects import run_when_campaign_became_active
+from services.pilot_campaign_access import user_has_pilot_campaign_bypass
 from services.storage import StorageService
+from services.user_follows import UserFollowsService
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -47,8 +52,11 @@ def _is_admin(user: UserResponse) -> bool:
 
 
 def _normalize_drive_media_urls(d: dict) -> None:
-    """Google Drive share links are HTML; map common patterns to /uc?export=view for <img>."""
-    for key in ("image_url", "gif_url", "video_url"):
+    """Google Drive share links are HTML; map common patterns to /uc?export=view for <img> only.
+
+    Do not rewrite video_url: that needs /file/d/…/preview (iframe) or a direct media URL, not export=view.
+    """
+    for key in ("image_url", "gif_url"):
         val = d.get(key)
         if isinstance(val, str) and val.strip():
             d[key] = normalize_cover_image_url(val)
@@ -208,6 +216,7 @@ class CreateCampaignEligibilityResponse(BaseModel):
     paid_donations_count: int
     admin_bypass: bool = False
     dev_bypass: bool = False
+    pilot_bypass: bool = False
     message: Optional[str] = None
 
 
@@ -221,11 +230,39 @@ class CampaignOrganizerInsightsResponse(BaseModel):
     campaigns_active_count: int
     is_verified_organization: bool = False
     organization_badge_label: Optional[str] = None
+    # Admin-curated recognition (e.g. Early partner), visible to all visitors.
+    curated_badge_label: Optional[str] = None
+    curated_badge_slug: Optional[str] = None
+    curated_highlight: Optional[str] = None
+    organizer_follower_count: int = 0
+    """How many accounts follow this organizer (public social proof)."""
+    viewer_following_organizer: Optional[bool] = None
+    """When a viewer is logged in: whether they follow this organizer."""
+    viewer_friends_with_organizer: Optional[bool] = None
+    """When a viewer is logged in: mutual follow (friends) with this organizer."""
 
 
 class CampaignsListResponse(BaseModel):
     """List response schema"""
     items: List[CampaignsResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+class NetworkActivityItemResponse(BaseModel):
+    """One row: someone you follow donated or created a share link for a live campaign."""
+
+    activity_type: str
+    occurred_at: Optional[str] = None
+    actor_user_id: str
+    actor_display_name: Optional[str] = None
+    donation_amount: Optional[float] = None
+    campaign: CampaignsResponse
+
+
+class NetworkActivityListResponse(BaseModel):
+    items: List[NetworkActivityItemResponse]
     total: int
     skip: int
     limit: int
@@ -369,6 +406,79 @@ async def query_campaignss(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
+@router.get("/following", response_model=CampaignsListResponse)
+async def list_following_campaigns(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(24, ge=1, le=200),
+    friends_only: bool = Query(
+        False,
+        description="If true, only campaigns owned by mutual follows (friends).",
+    ),
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Active campaigns from organizers the current user follows (for the Following tab)."""
+    ufs = UserFollowsService(db)
+    if friends_only:
+        ids = await ufs.list_mutual_friend_ids(current_user.id)
+    else:
+        ids = await ufs.list_following_user_ids(current_user.id)
+    service = CampaignsService(db)
+    pack = await service.get_following_feed(ids, skip=skip, limit=limit, viewer=current_user)
+    items = [_campaign_response_for_viewer(c, current_user) for c in pack["items"]]
+    return CampaignsListResponse(
+        items=items,
+        total=pack["total"],
+        skip=pack["skip"],
+        limit=pack["limit"],
+    )
+
+
+@router.get("/network-activity", response_model=NetworkActivityListResponse)
+async def list_network_activity_campaigns(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(24, ge=1, le=100),
+    connection: str = Query(
+        "following",
+        description="following = anyone you follow; friends = mutual follows only.",
+    ),
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Active campaigns tied to people you follow via their paid gifts or share links they created."""
+    ufs = UserFollowsService(db)
+    mode = (connection or "following").strip().lower()
+    if mode == "friends":
+        ids = await ufs.list_mutual_friend_ids(current_user.id)
+    else:
+        ids = await ufs.list_following_user_ids(current_user.id)
+    pack = await build_network_activity_feed(
+        db, following_ids=ids, skip=skip, limit=limit, viewer=current_user
+    )
+    out_items: List[NetworkActivityItemResponse] = []
+    for raw in pack.get("items") or []:
+        camp = raw.get("campaign")
+        if not camp:
+            continue
+        cr = _campaign_response_for_viewer(camp, current_user)
+        out_items.append(
+            NetworkActivityItemResponse(
+                activity_type=str(raw.get("activity_type") or ""),
+                occurred_at=raw.get("occurred_at"),
+                actor_user_id=str(raw.get("actor_user_id") or ""),
+                actor_display_name=raw.get("actor_display_name"),
+                donation_amount=raw.get("donation_amount"),
+                campaign=cr,
+            )
+        )
+    return NetworkActivityListResponse(
+        items=out_items,
+        total=int(pack.get("total") or 0),
+        skip=int(pack.get("skip") or 0),
+        limit=int(pack.get("limit") or 0),
+    )
+
+
 @router.post("/presign-cover", response_model=PresignCoverResponse)
 async def presign_campaign_cover(
     body: PresignCoverRequest,
@@ -428,7 +538,7 @@ async def presign_campaign_video(
 
 @router.put("/cover-local-upload/{token}")
 async def cover_local_upload_put(token: str, request: Request):
-    """Write raw bytes for one signed cover upload (used when DOLLI_COVER_STORAGE=local)."""
+    """Write raw bytes for one signed cover or video upload (DOLLI_COVER_STORAGE=local)."""
     try:
         _uid, object_key = verify_upload_token(token)
     except ValueError:
@@ -502,20 +612,31 @@ async def query_campaignss_all(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-def _campaign_create_allowed(
+async def _campaign_create_allowed(
     *,
+    db: AsyncSession,
     user_role: str,
     paid_donations_count: int,
-) -> tuple[bool, bool, bool]:
-    """Returns (can_create, admin_bypass, dev_bypass)."""
+    user_email: Optional[str] = None,
+) -> tuple[bool, bool, bool, bool]:
+    """Returns (can_create, admin_bypass, dev_bypass, pilot_bypass).
+
+    Pilot list = union of ``PILOT_CAMPAIGN_CREATE_EMAILS`` (env) and admin-edited DB list.
+    """
     dev_bypass = os.environ.get("ALLOW_CAMPAIGN_CREATE_WITHOUT_DONATION", "").lower() in (
         "1",
         "true",
         "yes",
     )
-    if user_role == "admin" or dev_bypass:
-        return True, user_role == "admin", dev_bypass
-    return paid_donations_count >= 1, False, False
+    admin_bypass = (user_role or "").strip().lower() == "admin"
+    pilot_bypass = await user_has_pilot_campaign_bypass(db, user_email)
+    if admin_bypass or dev_bypass:
+        return True, admin_bypass, dev_bypass, False
+    if pilot_bypass:
+        return True, False, False, True
+    if paid_donations_count >= 1:
+        return True, False, False, False
+    return False, False, False, False
 
 
 @router.get("/create-eligibility", response_model=CreateCampaignEligibilityResponse)
@@ -526,9 +647,11 @@ async def campaign_create_eligibility(
     """Whether the current user may create a campaign (requires ≥1 paid donation unless admin/dev flag)."""
     donations = DonationsService(db)
     paid = await donations.count_completed_donations_for_user(current_user.id)
-    can, admin_bypass, dev_bypass = _campaign_create_allowed(
+    can, admin_bypass, dev_bypass, pilot_bypass = await _campaign_create_allowed(
+        db=db,
         user_role=current_user.role or "user",
         paid_donations_count=paid,
+        user_email=current_user.email,
     )
     msg = None
     if not can:
@@ -541,6 +664,7 @@ async def campaign_create_eligibility(
         paid_donations_count=paid,
         admin_bypass=admin_bypass,
         dev_bypass=dev_bypass,
+        pilot_bypass=pilot_bypass,
         message=msg,
     )
 
@@ -549,6 +673,7 @@ async def campaign_create_eligibility(
 async def get_campaign_organizer_insights(
     id: int,
     db: AsyncSession = Depends(get_db),
+    viewer: Optional[UserResponse] = Depends(get_optional_current_user),
 ):
     """
     Aggregate public stats about who is running this campaign:
@@ -597,6 +722,25 @@ async def get_campaign_organizer_insights(
 
     badge_label = "Verified organization" if is_verified else None
 
+    curated_label: Optional[str] = None
+    curated_slug: Optional[str] = None
+    curated_highlight: Optional[str] = None
+    if auth_row and getattr(auth_row, "email", None):
+        cb = await curated_badge_for_email(db, auth_row.email)
+        if cb:
+            curated_label = cb.get("label")
+            curated_slug = cb.get("slug")
+            hl = cb.get("highlight") or "none"
+            curated_highlight = None if hl == "none" else hl
+
+    ufs = UserFollowsService(db)
+    follower_count = await ufs.follower_count(organizer_id)
+    viewer_following: Optional[bool] = None
+    viewer_friends: Optional[bool] = None
+    if viewer:
+        viewer_following = await ufs.is_following(viewer.id, organizer_id)
+        viewer_friends = await ufs.is_friend(viewer.id, organizer_id)
+
     return CampaignOrganizerInsightsResponse(
         display_name=display_name,
         paid_donations_count=paid,
@@ -604,6 +748,12 @@ async def get_campaign_organizer_insights(
         campaigns_active_count=active,
         is_verified_organization=is_verified,
         organization_badge_label=badge_label,
+        curated_badge_label=curated_label,
+        curated_badge_slug=curated_slug,
+        curated_highlight=curated_highlight,
+        organizer_follower_count=follower_count,
+        viewer_following_organizer=viewer_following,
+        viewer_friends_with_organizer=viewer_friends,
     )
 
 
@@ -645,9 +795,11 @@ async def create_campaigns(
     donations = DonationsService(db)
     try:
         paid = await donations.count_completed_donations_for_user(current_user.id)
-        can, _, _ = _campaign_create_allowed(
+        can, _, _, _ = await _campaign_create_allowed(
+            db=db,
             user_role=current_user.role or "user",
             paid_donations_count=paid,
+            user_email=current_user.email,
         )
         if not can:
             raise HTTPException(
@@ -664,7 +816,19 @@ async def create_campaigns(
         result = await service.create(payload)
         if not result:
             raise HTTPException(status_code=400, detail="Failed to create campaigns")
-        
+
+        try:
+            await run_when_campaign_became_active(
+                db,
+                creator_id=current_user.id,
+                campaign_id=result.id,
+                campaign_title=result.title,
+                prev_status_lower=None,
+                new_status_lower=(result.status or "active"),
+            )
+        except Exception:
+            logger.exception("follower notifications after create failed campaign_id=%s", result.id)
+
         logger.info(f"Campaigns created successfully with id: {result.id}")
         return _campaign_response_for_viewer(result, current_user)
     except HTTPException:
@@ -766,12 +930,25 @@ async def update_campaigns(
     if not update_dict:
         return _campaign_response_for_viewer(campaign, current_user)
 
+    prev_status_lower = (campaign.status or "").strip().lower()
     service = CampaignsService(db)
     try:
         result = await service.update(id, update_dict)
         if not result:
             logger.warning(f"Campaigns with id {id} not found for update")
             raise HTTPException(status_code=404, detail="Campaigns not found")
+
+        try:
+            await run_when_campaign_became_active(
+                db,
+                creator_id=campaign.user_id,
+                campaign_id=result.id,
+                campaign_title=result.title,
+                prev_status_lower=prev_status_lower,
+                new_status_lower=(result.status or "active"),
+            )
+        except Exception:
+            logger.exception("follower notifications after update failed campaign_id=%s", id)
 
         logger.info(f"Campaigns {id} updated successfully")
         return _campaign_response_for_viewer(result, current_user)

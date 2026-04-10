@@ -156,9 +156,10 @@ export default function Index() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0A0A0F] text-white">
+    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
       <Header />
 
+      <div className="flex flex-1 flex-col">
       {/* Hero Section */}
       <section className="relative pt-16 overflow-hidden">
         <div
@@ -203,6 +204,23 @@ export default function Index() {
                 </Button>
               </Link>
             </div>
+            <nav
+              className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-white/10 pt-10 text-sm"
+              aria-label="Popular destinations"
+            >
+              <Link to="/explore" className="text-slate-500 transition-colors hover:text-violet-300">
+                Explore all
+              </Link>
+              <Link to="/search/users" className="text-slate-500 transition-colors hover:text-violet-300">
+                Find people
+              </Link>
+              <Link to="/friends" className="text-slate-500 transition-colors hover:text-violet-300">
+                Friends
+              </Link>
+              <Link to="/notifications" className="text-slate-500 transition-colors hover:text-violet-300">
+                Notifications
+              </Link>
+            </nav>
           </div>
         </div>
       </section>
@@ -273,6 +291,7 @@ export default function Index() {
         </div>
       </section>
 
+      </div>
       <SiteFooter />
     </div>
   );

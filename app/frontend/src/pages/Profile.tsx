@@ -3,11 +3,15 @@ import { Link } from 'react-router-dom';
 import { client } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/lib/auth';
+import { fetchEarlyDonorMilestone, type EarlyDonorMilestone } from '@/lib/earlyDonorMilestone';
+import { fetchMyFriends } from '@/lib/friends';
+import { profileHeroPromoClass } from '@/lib/curatedHighlight';
 import Header from '@/components/Header';
+import { SiteFooter } from '@/components/SiteFooter';
 import { OwnerCampaignControls } from '@/components/OwnerCampaignControls';
 import { toast } from 'sonner';
 import {
-  Heart, Trophy, Flame, Share2, TrendingUp, User,
+  Heart, Trophy, Flame, Share2, TrendingUp, User, HeartHandshake,
   Copy, CheckCircle2, Pencil, Check, X,
   Zap, Users, Gift, Sparkles,
 } from 'lucide-react';
@@ -115,7 +119,7 @@ const INSTAGRAM_ICON = (
 );
 
 export default function Profile() {
-  const { user: authUser, login, loading: authLoading, refetch } = useAuth();
+  const { user: authUser, loading: authLoading, refetch } = useAuth();
   const [donations, setDonations] = useState<Donation[]>([]);
   const [badges, setBadges] = useState<Badge[]>([]);
   const [referrals, setReferrals] = useState<Referral[]>([]);
@@ -127,6 +131,8 @@ export default function Profile() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
+  const [earlyDonor, setEarlyDonor] = useState<EarlyDonorMilestone | null>(null);
+  const [friendCount, setFriendCount] = useState<number | null>(null);
 
   const user = USE_MOCK_DATA ? MOCK_USER : authUser;
   const isLoading = USE_MOCK_DATA ? false : (authLoading || loading);
@@ -141,16 +147,27 @@ export default function Profile() {
       return;
     }
     if (user) {
+      void loadEarlyDonor();
       loadData();
     } else {
       setLoading(false);
     }
   }, [user]);
 
+  const loadEarlyDonor = async () => {
+    if (USE_MOCK_DATA) return;
+    try {
+      const m = await fetchEarlyDonorMilestone();
+      setEarlyDonor(m);
+    } catch {
+      setEarlyDonor(null);
+    }
+  };
+
   const loadData = async () => {
     if (!user?.id) return;
     try {
-      const [donationsRes, badgesRes, referralsRes, campaignsRes] = await Promise.all([
+      const [donationsRes, badgesRes, referralsRes, campaignsRes, friendsRes] = await Promise.all([
         client.entities.donations.query({ sort: '-created_at', limit: 50 }),
         client.entities.badges.query({ limit: 50 }),
         client.entities.referrals.query({ sort: '-created_at', limit: 50 }),
@@ -159,11 +176,13 @@ export default function Profile() {
           sort: '-created_at',
           limit: 50,
         }),
+        fetchMyFriends(),
       ]);
       setDonations(donationsRes?.data?.items || []);
       setBadges(badgesRes?.data?.items || []);
       setReferrals(referralsRes?.data?.items || []);
       setCampaigns(campaignsRes?.data?.items || []);
+      setFriendCount(friendsRes?.total ?? 0);
     } catch (err) {
       console.error('Failed to load profile data:', err);
     } finally {
@@ -196,32 +215,40 @@ export default function Profile() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
         <Header />
-        <div className="pt-24 flex items-center justify-center">
+        <div className="flex flex-1 items-center justify-center pt-24">
           <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
         </div>
+        <SiteFooter />
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
         <Header />
-        <div className="pt-24 text-center max-w-md mx-auto px-4">
+        <div className="mx-auto w-full max-w-md flex-1 px-4 pb-12 pt-24 text-center">
           <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center mx-auto mb-6">
             <User className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-2xl font-bold mb-3">Sign in to see your impact</h2>
           <p className="text-slate-400 mb-6">Track your donations, badges, and referral impact.</p>
-          <Button
-            onClick={login}
-            className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold px-8 py-6 rounded-2xl shadow-2xl shadow-violet-500/25 border-0"
-          >
-            Sign In
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button asChild className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold px-8 py-6 rounded-2xl shadow-2xl shadow-violet-500/25 border-0">
+              <Link to="/login">Sign in</Link>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              className="border-white/20 text-white hover:bg-white/5 font-semibold px-8 py-6 rounded-2xl"
+            >
+              <Link to="/register">Create account</Link>
+            </Button>
+          </div>
         </div>
+        <SiteFooter />
       </div>
     );
   }
@@ -288,12 +315,16 @@ export default function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0F] text-white">
+    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
       <Header />
 
-      <div className="pt-20 max-w-2xl mx-auto px-4 sm:px-6 pb-16">
+      <div className="mx-auto w-full max-w-2xl flex-1 px-4 pb-16 pt-20 sm:px-6">
         {/* Profile Header */}
-        <div className="bg-[#13131A] rounded-2xl border border-white/5 p-6 mb-6 relative overflow-hidden">
+        <div
+          className={`bg-[#13131A] rounded-2xl border border-white/5 p-6 mb-6 relative overflow-hidden ${profileHeroPromoClass(
+            authUser?.curated_highlight as 'frame' | 'featured' | null | undefined,
+          )}`}
+        >
           <div className="absolute top-0 right-0 w-40 h-40 bg-violet-500/5 rounded-full blur-3xl" />
           <div className="relative flex items-center gap-4 mb-2">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center shadow-lg shadow-violet-500/25 ring-2 ring-violet-500/20 ring-offset-2 ring-offset-[#13131A]">
@@ -354,9 +385,19 @@ export default function Profile() {
                 </div>
               ) : (
                 <>
-                  <h1 className="text-xl font-bold truncate">
-                    {user?.name?.trim() ? user.name : 'My Impact'}
-                  </h1>
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <h1 className="text-xl font-bold truncate">
+                      {user?.name?.trim() ? user.name : 'My Impact'}
+                    </h1>
+                    {authUser?.curated_badge_label && (
+                      <span
+                        className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-amber-300 border border-amber-500/35 rounded-full px-2 py-0.5"
+                        title={authUser.curated_badge_label}
+                      >
+                        {authUser.curated_badge_label}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-slate-500">Tap → Share → Multiply</p>
                 </>
               )}
@@ -376,6 +417,59 @@ export default function Profile() {
             )}
           </div>
         </div>
+
+        {!USE_MOCK_DATA && friendCount !== null && (
+          <Link
+            to="/friends"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-sky-500/20 bg-sky-500/5 px-4 py-3 mb-6 hover:border-sky-500/35 transition-colors"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/25 flex items-center justify-center shrink-0">
+                <HeartHandshake className="w-5 h-5 text-sky-300" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">Friends on Dolli</p>
+                <p className="text-xs text-slate-500 truncate">Mutual follows — same list as Explore → Friends.</p>
+              </div>
+            </div>
+            <span className="text-lg font-bold text-sky-200 tabular-nums shrink-0">{friendCount}</span>
+          </Link>
+        )}
+
+        {!USE_MOCK_DATA && earlyDonor?.milestone != null && earlyDonor.rank != null && (
+          <div className="mb-6 rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-500/10 via-[#13131A] to-violet-600/10 p-5 sm:p-6">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
+                <Trophy className="w-6 h-6 text-amber-300" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-amber-200/80 mb-1">
+                  Platform milestone
+                </p>
+                <h2 className="text-lg sm:text-xl font-bold text-white leading-snug">
+                  Among the first {earlyDonor.milestone.toLocaleString()} donors on Dolli
+                </h2>
+                <p className="text-sm text-slate-400 mt-2">
+                  Your place by first completed gift:{' '}
+                  <span className="text-white font-semibold">#{earlyDonor.rank}</span>
+                  {earlyDonor.total_distinct_donors > 0 ? (
+                    <>
+                      {' '}
+                      <span className="text-slate-500">
+                        · {earlyDonor.total_distinct_donors.toLocaleString()} donor
+                        {earlyDonor.total_distinct_donors === 1 ? '' : 's'} on the platform so far
+                      </span>
+                    </>
+                  ) : null}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-3 leading-relaxed">
+                  Rankings use the time of each account’s first successful donation. Tiers unlock at 100, 1,000, and
+                  10,000 — a permanent thank-you as the community grows.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {!USE_MOCK_DATA && (
           <div className="bg-[#13131A] rounded-2xl border border-white/5 p-5 mb-6">
@@ -745,6 +839,7 @@ export default function Profile() {
           </div>
         )}
       </div>
+      <SiteFooter />
     </div>
   );
 }

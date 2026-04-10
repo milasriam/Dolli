@@ -268,6 +268,17 @@ async def verify_payment(
         if newly:
             camp = await _get_campaign_or_404(db, donation.campaign_id)
             await _email_donor_receipt(db, donation, camp.title or "your fundraiser")
+            try:
+                from services.campaign_progress_notifications import run_campaign_progress_after_pledge
+
+                new_r = float(camp.raised_amount or 0)
+                old_r = new_r - float(donation.amount or 0)
+                await run_campaign_progress_after_pledge(db, camp, old_raised=old_r, new_raised=new_r)
+            except Exception:
+                logger.exception(
+                    "campaign_progress_notifications failed campaign_id=%s",
+                    donation.campaign_id,
+                )
     elif verification.status == "failed":
         donation = await _mark_failed(db, donation, verification.provider_reference)
     else:
@@ -312,6 +323,17 @@ async def halyk_callback(payload: HalykCallbackRequest, db: AsyncSession = Depen
         if newly:
             camp = await _get_campaign_or_404(db, donation.campaign_id)
             await _email_donor_receipt(db, donation, camp.title or "your fundraiser")
+            try:
+                from services.campaign_progress_notifications import run_campaign_progress_after_pledge
+
+                new_r = float(camp.raised_amount or 0)
+                old_r = new_r - float(donation.amount or 0)
+                await run_campaign_progress_after_pledge(db, camp, old_raised=old_r, new_raised=new_r)
+            except Exception:
+                logger.exception(
+                    "campaign_progress_notifications failed campaign_id=%s",
+                    donation.campaign_id,
+                )
         status_value = donation.payment_status
     elif result_code in {"107", "200", "201"} or status_name in {"NEW", "AUTH", "IN_PROGRESS", "PENDING"}:
         if provider_reference:

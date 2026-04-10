@@ -19,18 +19,25 @@ from core.auth import (
 from core.config import settings
 from core.database import get_db
 from dependencies.auth import get_admin_user, get_current_user
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from models.auth import User
 from schemas.auth import (
     AdminSetUserOrganizationRequest,
+    EarlyDonorMilestoneResponse,
     LoginOptionsResponse,
+    MarkNotificationsReadRequest,
     PlatformTokenExchangeRequest,
     TokenExchangeResponse,
+    UnreadNotificationsResponse,
+    UserNotificationListResponse,
+    UserNotificationResponse,
     UserResponse,
 )
 from services.auth import AuthService
+from services.donations import DonationsService
+from services.user_notifications import UserNotificationsService
 from services.social_login import (
     build_meta_authorize_url,
     build_tiktok_authorize_url,
@@ -426,6 +433,67 @@ async def exchange_platform_token(
 async def get_current_user_info(current_user: UserResponse = Depends(get_current_user)):
     """Get current user info."""
     return current_user
+
+
+@router.get("/early-donor-milestone", response_model=EarlyDonorMilestoneResponse)
+async def get_early_donor_milestone(
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """First-wave donor rank (100 / 1k / 10k) for profile milestones; cheap to poll from the profile page."""
+    svc = DonationsService(db)
+    snap = await svc.early_donor_milestone_snapshot(current_user.id)
+    return EarlyDonorMilestoneResponse(**snap)
+
+
+@router.get("/notifications", response_model=UserNotificationListResponse)
+async def list_my_notifications(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    svc = UserNotificationsService(db)
+    pack = await svc.list_for_user(current_user.id, skip=skip, limit=limit)
+    items = [UserNotificationResponse.model_validate(x) for x in pack["items"]]
+    return UserNotificationListResponse(
+        items=items,
+        total=pack["total"],
+        skip=pack["skip"],
+        limit=pack["limit"],
+    )
+
+
+@router.get("/notifications/unread-count", response_model=UnreadNotificationsResponse)
+async def notifications_unread_count(
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    svc = UserNotificationsService(db)
+    n = await svc.unread_count(current_user.id)
+    return UnreadNotificationsResponse(count=n)
+
+
+@router.post("/notifications/mark-read", status_code=status.HTTP_204_NO_CONTENT)
+async def notifications_mark_read(
+    body: MarkNotificationsReadRequest,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    svc = UserNotificationsService(db)
+    if body.ids:
+        await svc.mark_read(current_user.id, body.ids)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/notifications/mark-all-read", status_code=status.HTTP_204_NO_CONTENT)
+async def notifications_mark_all_read(
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    svc = UserNotificationsService(db)
+    await svc.mark_all_read(current_user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.put("/admin/users/{user_id}/organization", response_model=UserResponse)

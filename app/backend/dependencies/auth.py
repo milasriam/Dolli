@@ -9,6 +9,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from models.auth import User as UserRow
 from schemas.auth import UserResponse
+from services.curated_user_badges import curated_badge_for_email
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +41,21 @@ def _row_to_user_response(row: UserRow) -> UserResponse:
         organization_display_name=getattr(row, "organization_display_name", None),
         platform_fee_bps=getattr(row, "platform_fee_bps", None),
         nsfw_filter_enabled=bool(getattr(row, "nsfw_filter_enabled", True)),
+    )
+
+
+async def _with_curated_badge(user: UserResponse, db: AsyncSession) -> UserResponse:
+    badge = await curated_badge_for_email(db, user.email)
+    if not badge:
+        return user
+    hl = badge.get("highlight") or "none"
+    highlight = None if hl == "none" else hl
+    return user.model_copy(
+        update={
+            "curated_badge_label": badge["label"],
+            "curated_badge_slug": badge.get("slug") or None,
+            "curated_highlight": highlight,
+        }
     )
 
 
@@ -103,9 +119,10 @@ async def get_current_user(
     result = await db.execute(select(UserRow).where(UserRow.id == uid))
     row = result.scalar_one_or_none()
     if row:
-        return _row_to_user_response(row)
-
-    return _jwt_fallback_user(uid, payload)
+        user = _row_to_user_response(row)
+    else:
+        user = _jwt_fallback_user(uid, payload)
+    return await _with_curated_badge(user, db)
 
 
 async def get_optional_current_user(
@@ -126,8 +143,10 @@ async def get_optional_current_user(
     result = await db.execute(select(UserRow).where(UserRow.id == uid))
     row = result.scalar_one_or_none()
     if row:
-        return _row_to_user_response(row)
-    return _jwt_fallback_user(uid, payload)
+        user = _row_to_user_response(row)
+    else:
+        user = _jwt_fallback_user(uid, payload)
+    return await _with_curated_badge(user, db)
 
 
 async def get_admin_user(current_user: UserResponse = Depends(get_current_user)) -> UserResponse:

@@ -61,3 +61,72 @@ async def send_donation_receipt_email(to_email: str, campaign_title: str, amount
         logger.info("donation_receipt_email sent to=%s", to_email)
     except Exception:
         logger.exception("donation_receipt_email failed to=%s", to_email)
+
+
+def _frontend_base_url() -> str:
+    return (os.environ.get("FRONTEND_URL") or "https://dolli.space").strip().rstrip("/")
+
+
+async def send_followers_new_campaign_emails(
+    *,
+    recipient_emails: list[str],
+    organizer_display: str,
+    campaign_title: str,
+    campaign_id: int,
+) -> None:
+    """Optional digest when SMTP is configured; capped to avoid slow requests."""
+    if not (os.environ.get("SMTP_HOST") or "").strip():
+        return
+    base = _frontend_base_url()
+    url = f"{base}/campaign/{campaign_id}"
+    subject = f"New fundraiser on Dolli — {organizer_display}"
+    cap = min(len(recipient_emails), 40)
+    for to_addr in recipient_emails[:cap]:
+        body = (
+            f"{organizer_display} started a new fundraiser: \"{campaign_title}\".\n\n"
+            f"Open: {url}\n\n"
+            "You received this because you follow this organizer on Dolli.\n"
+        )
+        try:
+            await asyncio.to_thread(
+                _send_sync,
+                to_addr=to_addr.strip(),
+                subject=subject,
+                text_body=body,
+            )
+        except Exception:
+            logger.exception("follower_new_campaign_email failed to=%s", to_addr)
+    if len(recipient_emails) > cap:
+        logger.warning("follower_new_campaign_email truncated sent=%s total=%s", cap, len(recipient_emails))
+
+
+async def send_followers_campaign_milestone_emails(
+    *,
+    recipient_emails: list[str],
+    milestone_pct: int,
+    campaign_title: str,
+    campaign_id: int,
+) -> None:
+    if not (os.environ.get("SMTP_HOST") or "").strip():
+        return
+    base = _frontend_base_url()
+    url = f"{base}/campaign/{campaign_id}"
+    subject = f"{milestone_pct}% funded — {campaign_title[:80]}"
+    cap = min(len(recipient_emails), 40)
+    for to_addr in recipient_emails[:cap]:
+        body = (
+            f"A fundraiser you follow reached {milestone_pct}% of its goal: \"{campaign_title}\".\n\n"
+            f"Open: {url}\n\n"
+            "You’re receiving this because you follow the organizer on Dolli.\n"
+        )
+        try:
+            await asyncio.to_thread(
+                _send_sync,
+                to_addr=to_addr.strip(),
+                subject=subject,
+                text_body=body,
+            )
+        except Exception:
+            logger.exception("follower_milestone_email failed to=%s", to_addr)
+    if len(recipient_emails) > cap:
+        logger.warning("follower_milestone_email truncated sent=%s total=%s", cap, len(recipient_emails))

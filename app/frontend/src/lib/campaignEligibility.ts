@@ -6,6 +6,7 @@ export type CampaignCreateEligibility = {
   paid_donations_count: number;
   admin_bypass: boolean;
   dev_bypass: boolean;
+  pilot_bypass: boolean;
   message: string | null;
 };
 

@@ -3,6 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { client } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import Header from '@/components/Header';
+import { SiteFooter } from '@/components/SiteFooter';
 import { ShareCampaignDialog } from '@/components/ShareCampaignDialog';
 import { toast } from 'sonner';
 import { Heart, Share2, Trophy, ArrowRight, RefreshCw } from 'lucide-react';
@@ -154,10 +155,10 @@ export default function DonationSuccess() {
   const cid = campaignId ? Number(campaignId) : NaN;
 
   return (
-    <div className="min-h-screen bg-[#0A0A0F] text-white">
+    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
       <Header />
 
-      <div className="pt-24 max-w-lg mx-auto px-4 pb-16">
+      <div className="mx-auto w-full max-w-lg flex-1 px-4 pb-16 pt-24">
         {paymentStatus === 'verifying' && (
           <div className="text-center py-20">
             <div className="w-16 h-16 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -352,6 +353,7 @@ export default function DonationSuccess() {
           </div>
         )}
       </div>
+      <SiteFooter />
     </div>
   );
 }

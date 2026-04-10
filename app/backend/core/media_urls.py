@@ -14,7 +14,11 @@ def normalize_cover_image_url(raw: str | None) -> str:
     if not raw or not str(raw).strip():
         return ""
     s = str(raw).strip()
-    m = re.search(r"https://drive\.google\.com/file/d/([a-zA-Z0-9_-]+)(?:/[^?\s]*)?", s, re.I)
+    m = re.search(
+        r"https://drive\.google\.com(?:/u/\d+)?/file/d/([a-zA-Z0-9_-]+)(?:/[^\s?]*)?",
+        s,
+        re.I,
+    )
     if m:
         return f"https://drive.google.com/uc?export=view&id={m.group(1)}"
     m2 = re.search(r"https://drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)", s, re.I)

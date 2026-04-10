@@ -63,11 +63,15 @@ fi
 echo "===> Backend dependencies + migrations"
 cd ${REMOTE_APP}/app/backend
 "\${VENV_PIP}" install -q -r requirements.txt
-# Legacy SQLite DBs may have tables but no alembic_version row; first migration would fail with "already exists".
-CUR_REV=\$("\${VENV_PY}" -m alembic current 2>/dev/null | grep -oE '[a-f0-9]{12}' | tail -n1 || true)
-if [[ -z "\${CUR_REV}" ]]; then
-  echo "===> No Alembic revision in DB; stamping e7b2a1c0d3e4 (schema up to campaign media cols), then upgrading"
-  "\${VENV_PY}" -m alembic stamp e7b2a1c0d3e4
+echo "===> Alembic SQLite preflight"
+if [[ -f ${REMOTE_APP}/scripts/dolli_alembic_preflight.py ]]; then
+  if ! "\${VENV_PY}" ${REMOTE_APP}/scripts/dolli_alembic_preflight.py; then
+    ec=\$?
+    echo "ERROR: Alembic preflight failed (exit \$ec). Fix DATABASE_URL / SQLite file or run a one-time stamp; see stderr above."
+    exit 1
+  fi
+else
+  echo "WARN: scripts/dolli_alembic_preflight.py missing — skipping preflight"
 fi
 "\${VENV_PY}" -m alembic upgrade head
 
@@ -112,6 +116,14 @@ curl -sSI -X OPTIONS "${API_URL}/api/v1/auth/local-login" \
   -H "Origin: ${SITE_URL}" \
   -H "Access-Control-Request-Method: POST" \
   -H "Access-Control-Request-Headers: content-type" | sed -n '1,25p' || true
+
+if [ "${TARGET}" = "staging" ]; then
+  echo "===> Demo scenario campaigns (idempotent; DATABASE_URL already exported)"
+  cd ${REMOTE_APP}
+  if ! "\${VENV_PY}" scripts/seed_demo_campaigns.py; then
+    echo "WARN: scripts/seed_demo_campaigns.py failed (non-fatal for deploy)"
+  fi
+fi
 REMOTE
 
 echo "✅ Deploy ${TARGET} done"

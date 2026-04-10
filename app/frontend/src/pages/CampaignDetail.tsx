@@ -8,12 +8,14 @@ import Header from '@/components/Header';
 import { OwnerCampaignControls } from '@/components/OwnerCampaignControls';
 import { CampaignHeroMedia } from '@/components/CampaignHeroMedia';
 import { fetchCampaignOrganizerInsights, type CampaignOrganizerInsights } from '@/lib/campaignOrganizerInsights';
+import { fetchFollowStatus, setFollowing } from '@/lib/follows';
+import { organizerPromoCardClass } from '@/lib/curatedHighlight';
 import { trackClientEvent } from '@/lib/productAnalytics';
 import { toast } from 'sonner';
 import {
   Heart, Share2, Users, Clock, ArrowLeft,
   Sparkles, UserCircle, Gift, Megaphone, ShieldCheck,
-  Smartphone, Copy, X,
+  Smartphone, Copy, X,   UserPlus, UserCheck, HeartHandshake,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -87,6 +89,8 @@ export default function CampaignDetail() {
   const [organizerInsights, setOrganizerInsights] = useState<CampaignOrganizerInsights | null>(null);
   const [lastFeeBps, setLastFeeBps] = useState<number | null>(null);
   const [showPostPublish, setShowPostPublish] = useState(false);
+  const [followingOrganizer, setFollowingOrganizer] = useState<boolean | null>(null);
+  const [followBusy, setFollowBusy] = useState(false);
 
   const referrer = searchParams.get('ref');
   const fromCreate = searchParams.get('from') === 'create';
@@ -131,7 +135,21 @@ export default function CampaignDetail() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, user?.id]);
+
+  useEffect(() => {
+    if (!campaign || !user || user.id === campaign.user_id) {
+      setFollowingOrganizer(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchFollowStatus(campaign.user_id).then((r) => {
+      if (!cancelled) setFollowingOrganizer(r?.following ?? false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaign?.user_id, user?.id]);
 
   const loadCampaign = async () => {
     try {
@@ -156,6 +174,30 @@ export default function CampaignDetail() {
       });
     } catch {
       // silent
+    }
+  };
+
+  const toggleFollowOrganizer = async () => {
+    if (!user || !campaign || followingOrganizer === null) return;
+    setFollowBusy(true);
+    try {
+      const next = !followingOrganizer;
+      await setFollowing(campaign.user_id, next);
+      setFollowingOrganizer(next);
+      toast.success(
+        next
+          ? 'You’ll see their new fundraisers in Following and notifications.'
+          : 'Unfollowed this organizer.',
+      );
+      const cid = Number(id);
+      if (Number.isFinite(cid)) {
+        const data = await fetchCampaignOrganizerInsights(cid);
+        if (data) setOrganizerInsights(data);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update subscription');
+    } finally {
+      setFollowBusy(false);
     }
   };
 
@@ -399,7 +441,11 @@ export default function CampaignDetail() {
             </div>
 
             {organizerInsights && (
-              <div className="rounded-2xl border border-white/10 bg-[#13131A] p-5 sm:p-6">
+              <div
+                className={`rounded-2xl border border-white/10 bg-[#13131A] p-5 sm:p-6 ${organizerPromoCardClass(
+                  organizerInsights.curated_highlight as 'frame' | 'featured' | null | undefined,
+                )}`}
+              >
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500/30 to-pink-500/20 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
                     <UserCircle className="w-7 h-7 text-violet-300" />
@@ -419,12 +465,67 @@ export default function CampaignDetail() {
                             {organizerInsights.organization_badge_label}
                           </span>
                         )}
+                      {organizerInsights.curated_badge_label && (
+                        <span
+                          className="inline-flex items-center gap-1 shrink-0 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-200"
+                          title="Recognized by Dolli for helping grow the platform."
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300" aria-hidden />
+                          {organizerInsights.curated_badge_label}
+                        </span>
+                      )}
+                      {organizerInsights.viewer_friends_with_organizer && (
+                        <span
+                          className="inline-flex items-center gap-1 shrink-0 rounded-full border border-sky-500/35 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-sky-200"
+                          title="You follow each other on Dolli."
+                        >
+                          <HeartHandshake className="w-3.5 h-3.5 text-sky-300" aria-hidden />
+                          Friends
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-500 mt-1">
                       {organizerInsights.is_verified_organization
                         ? 'This organizer is a verified organization on Dolli.'
                         : 'Public activity on Dolli — helps you see who is behind this fundraiser.'}
+                      {organizerInsights.curated_badge_label
+                        ? ' The platform badge highlights early partners and other supporters you can trust as Dolli grows.'
+                        : ''}
                     </p>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs text-slate-500">
+                        <span className="font-medium text-slate-400">
+                          {(organizerInsights.organizer_follower_count ?? 0).toLocaleString()}
+                        </span>{' '}
+                        follower{(organizerInsights.organizer_follower_count ?? 0) === 1 ? '' : 's'} on Dolli
+                      </p>
+                      {user && campaign.user_id !== user.id && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={followingOrganizer ? 'outline' : 'default'}
+                          disabled={followBusy || followingOrganizer === null}
+                          onClick={() => void toggleFollowOrganizer()}
+                          className={
+                            followingOrganizer
+                              ? 'rounded-lg border-white/20 bg-transparent text-white hover:bg-white/10 h-9'
+                              : 'rounded-lg bg-violet-600 hover:bg-violet-500 text-white border-0 h-9'
+                          }
+                        >
+                          {followingOrganizer ? (
+                            <>
+                              <UserCheck className="w-4 h-4 mr-1.5" />
+                              Following
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="w-4 h-4 mr-1.5" />
+                              Follow
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
                     <div
                       className={`mt-4 grid grid-cols-1 gap-3 ${
                         organizerInsights.paid_donations_count != null ? 'sm:grid-cols-2' : ''

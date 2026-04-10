@@ -8,8 +8,10 @@ ssh -p 2222 -i ~/.ssh/id_ed25519 root@109.235.119.191
 
 ## 2) Health Checks
 
+Systemd unit names on the VPS are typically **`dolli-backend-prod`** and **`dolli-backend-staging`** (not a generic `dolli-backend`).
+
 ```bash
-systemctl status dolli-backend --no-pager -l
+systemctl status dolli-backend-prod --no-pager -l
 systemctl status nginx --no-pager -l
 systemctl status fail2ban --no-pager -l
 curl -i https://api.dolli.space/health
@@ -19,7 +21,8 @@ curl -I https://dolli.space
 ## 3) Service Restart
 
 ```bash
-systemctl restart dolli-backend
+systemctl restart dolli-backend-prod
+# staging: systemctl restart dolli-backend-staging
 systemctl reload nginx
 systemctl restart fail2ban
 ```
@@ -27,7 +30,7 @@ systemctl restart fail2ban
 ## 4) Logs for Debug
 
 ```bash
-journalctl -u dolli-backend -n 100 --no-pager
+journalctl -u dolli-backend-prod -n 100 --no-pager
 journalctl -u nginx -n 100 --no-pager
 tail -n 100 /var/log/nginx/error.log
 journalctl -u fail2ban -n 100 --no-pager
@@ -35,7 +38,9 @@ journalctl -u fail2ban -n 100 --no-pager
 
 ## 5) Deploy Updated Code
 
-Run from local Mac:
+From the repo, **`./scripts/deploy.sh prod`** or **`staging`** rsyncs the tree, runs **`scripts/dolli_alembic_preflight.py`** (SQLite: empty file, or legacy DB without `alembic_version`, aborts with instructions), then **`alembic upgrade head`**, builds the SPA, and restarts the backend.
+
+Run from local Mac (manual equivalent):
 
 ```bash
 rsync -az --delete \
@@ -54,15 +59,31 @@ set -a && source /etc/dolli/staging.env && set +a   # or prod.env — must expor
 cd /opt/dolli/app/app/frontend
 npm install
 npm run build
-systemctl restart dolli-backend
+systemctl restart dolli-backend-prod
 systemctl reload nginx
 ```
 
 ## 6) Database Backups
 
-- Backup script: `/usr/local/bin/dolli-backup.sh`
-- Backup directory: `/opt/dolli/backups`
-- Cron schedule: daily at `03:10 UTC` (`08:10 Asia/Almaty`)
+- **Script in repo:** `deploy/ops/dolli-backup.sh` — install on the VPS as `/usr/local/bin/dolli-backup.sh` (overwrite the old script that only copied `local.db`).
+- **What gets backed up:** `/var/lib/dolli/prod.db`, `/var/lib/dolli/staging.db`, and optionally `app/backend/local.db` (legacy).
+- **Backup directory:** `/opt/dolli/backups` — files named `prod_*.db.gz`, `staging_*.db.gz`, etc.
+- **Log:** `/var/log/dolli-backup.log`
+- **Retention:** newest **14** gzip files per family (`prod_`, `staging_`, …).
+
+Install / refresh after editing:
+
+```bash
+scp -P 2222 -i ~/.ssh/id_ed25519 deploy/ops/dolli-backup.sh \
+  root@109.235.119.191:/usr/local/bin/dolli-backup.sh
+ssh -p 2222 -i ~/.ssh/id_ed25519 root@109.235.119.191 'chmod +x /usr/local/bin/dolli-backup.sh'
+```
+
+Cron (example — adjust time if you like):
+
+```cron
+10 3 * * * root /usr/local/bin/dolli-backup.sh >> /var/log/dolli-backup.log 2>&1
+```
 
 Verify:
 
@@ -70,7 +91,17 @@ Verify:
 ls -lah /opt/dolli/backups
 cat /etc/cron.d/dolli-backup
 tail -n 50 /var/log/dolli-backup.log
+/usr/local/bin/dolli-backup.sh   # manual run
 ```
+
+Restore (outline — adjust paths and `DATABASE_URL` in the matching `.env`):
+
+1. Stop the backend that uses the DB: `systemctl stop dolli-backend-prod` (or `dolli-backend-staging`).
+2. Copy the chosen backup file over the live SQLite path from `DATABASE_URL` (or restore to a new path and update `DATABASE_URL`, then restart).
+3. Ensure the service user can read/write the file (`chown` if needed).
+4. `systemctl start dolli-backend-prod` and `curl -i https://api.dolli.space/health`.
+
+Test restores on **staging** periodically so the procedure stays familiar.
 
 ## 7) SSH Security Check
 
@@ -107,7 +138,7 @@ nginx -t && systemctl reload nginx
 ## 10) Emergency Recovery (Minimum)
 
 ```bash
-systemctl restart dolli-backend
+systemctl restart dolli-backend-prod
 systemctl restart nginx
 curl -i https://api.dolli.space/health
 curl -I https://dolli.space
@@ -158,7 +189,7 @@ In `/etc/dolli/staging.env` (then `systemctl restart dolli-backend-staging`):
 
 If neither mode is configured, the API returns **503** (*Cover upload is not configured…*) — paste a direct `https://…` image URL instead.
 
-**Google Drive:** a normal “anyone with the link” URL is an HTML page, not a raw image. Use `https://drive.google.com/uc?export=view&id=FILE_ID` or another CDN. The app rewrites common Drive `/file/d/…/view` and `/open?id=…` links on blur / save.
+**Google Drive:** a normal “anyone with the link” URL is an HTML page, not a raw image. For **cover images**, the app rewrites common `/file/d/…/view` and `/open?id=…` links to `uc?export=view&id=…` on blur / save. For **campaign video**, paste the full share link (or `open?id=…`); the SPA embeds Drive preview and **must not** use the `export=view` image shortcut.
 
 ### Staging: campaign AI (Create Campaign → Generate draft)
 
@@ -215,3 +246,46 @@ systemctl restart dolli-backend-staging
 ```
 
 Schema changes (new columns): prefer `alembic upgrade head` with `DATABASE_URL` exported to match that file. If Alembic cannot parse the URL, apply `ALTER TABLE` on the SQLite file with a short Python/sqlite3 script.
+
+### Production SQLite (same rule as staging)
+
+Keep production data **outside** the rsync’d tree:
+
+- **`/var/lib/dolli/prod.db`** with `DATABASE_URL=sqlite+aiosqlite:////var/lib/dolli/prod.db` in `/etc/dolli/prod.env`.
+
+Do **not** point production at an empty or app-tree file such as `.../local_prod.db` inside `/opt/dolli/app/...` — deploy + Alembic surprises become much harder.
+
+`systemd` `EnvironmentFile=` lines must be `KEY=value` only (no shell `export`, no stray bare words). If you ever `source` the file in bash for debugging, the same rules apply.
+
+## 12) Observability / external alerting (recommended)
+
+The app does not ship a hosted metrics stack; use lightweight **synthetic checks** from outside the VPS:
+
+- **Production API:** `GET https://api.dolli.space/health` — expect HTTP **200** and JSON `{"status":"healthy"}` (or your deployed equivalent).
+- **Staging API (if used):** same for `https://api-staging.dolli.space/health` or `https://staging.dolli.space/health` depending on how nginx exposes it.
+- **Site availability:** `HEAD https://dolli.space` (and staging origin) on the same interval.
+
+Providers (pick one): [UptimeRobot](https://uptimerobot.com/), [Better Stack](https://betterstack.com/), [Healthchecks.io](https://healthchecks.io/), Grafana Cloud synthetic checks, etc. Configure email or Slack when a check fails **twice in a row** to avoid flapping.
+
+**On-box follow-ups:** watch **disk** (`df -h`) and **TLS expiry** (`certbot certificates` if Let’s Encrypt). For deeper debugging, `journalctl -u dolli-backend-prod -n 200 --no-pager` (replace with `dolli-backend-staging` on staging).
+
+### 12.1) UptimeRobot (concrete example)
+
+1. Add monitor → **HTTP(s)** → URL `https://api.dolli.space/health` → name e.g. `Dolli prod API /health`.
+2. Optional stronger check: create a second monitor with **Keyword** monitoring on the same URL and require keyword **`healthy`** (response must contain that substring). Interval **5 min**, alert after **2** failed checks.
+3. Add **HTTP(s)** → `https://dolli.space` (or HEAD if the product supports it) for the SPA host.
+4. Optional **database** path: `GET https://api.dolli.space/database/health` — expect JSON with `"status":"healthy"` and `"service":"database"` (fails if SQLite is unreadable or migrations broke).
+
+Repeat for staging origins if you want parity.
+
+## 13) Frontend dependency audit (local)
+
+From the repo root:
+
+```bash
+cd app/frontend && npm audit && npm run build
+```
+
+`package.json` uses **`overrides`** so nested copies of **axios** and **serialize-javascript** stay on patched releases used by the SPA build.
+
+**Residual `npm audit` (moderate):** Vite 5 pins **esbuild** `0.21.x`. Advisory [GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99) applies to the **Vite dev server** (`npm run dev`), not to the static files produced by `npm run build` served by nginx. Mitigation: do not expose `npm run dev` to untrusted networks; use localhost or SSH port-forward. A full fix implies **Vite 6+** (or dropping `@metagptx/vite-plugin-source-locator` / upgrading that plugin when it supports a newer Vite).

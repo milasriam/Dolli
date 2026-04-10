@@ -1,83 +1,57 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { AuthChrome } from '@/components/AuthChrome';
 import { AlertCircle } from 'lucide-react';
 
 export default function AuthErrorPage() {
   const [searchParams] = useSearchParams();
-  const [countdown, setCountdown] = useState(3);
+  const navigate = useNavigate();
+  const [secondsLeft, setSecondsLeft] = useState(5);
   const errorMessage =
     searchParams.get('msg') ||
-    'Sorry, your authentication information is invalid or has expired';
+    'Your sign-in could not be completed. The link may have expired or already been used.';
 
   useEffect(() => {
-    // Countdown logic
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          // Redirect to home page
-          window.location.href = '/';
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    // Clean up timer
-    return () => clearInterval(timer);
-  }, []);
-
-  const handleReturnHome = () => {
-    window.location.href = '/';
-  };
+    if (secondsLeft <= 0) {
+      navigate('/', { replace: true });
+      return;
+    }
+    const t = window.setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [secondsLeft, navigate]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50 p-6 text-center">
-      <div className="space-y-6 max-w-md">
-        <div className="space-y-4">
-          {/* Error icon */}
+    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+      <AuthChrome />
+      <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md space-y-8 text-center">
           <div className="flex justify-center">
             <div className="relative">
-              <div className="absolute inset-0 bg-red-500/20 blur-xl rounded-full"></div>
-              <AlertCircle
-                className="relative h-12 w-12 text-red-500"
-                strokeWidth={1.5}
-              />
+              <div className="absolute inset-0 rounded-full bg-rose-500/20 blur-2xl" />
+              <AlertCircle className="relative h-14 w-14 text-rose-400" strokeWidth={1.5} aria-hidden />
             </div>
           </div>
-
-          {/* Error title */}
-          <h1 className="text-2xl font-bold text-gray-800">
-            Authentication Error
-          </h1>
-
-          {/* Error description */}
-          <p className="text-base text-muted-foreground">{errorMessage}</p>
-
-          {/* Countdown提示 */}
-          <div className="pt-2">
-            <p className="text-sm text-gray-500">
-              {countdown > 0 ? (
-                <>
-                  Will automatically return to the home page in{' '}
-                  <span className="text-blue-600 font-semibold text-base">
-                    {countdown}
-                  </span>{' '}
-                  seconds
-                </>
-              ) : (
-                'Redirecting...'
-              )}
+          <div className="space-y-3">
+            <h1 className="text-2xl font-bold tracking-tight text-white">Sign-in problem</h1>
+            <p className="text-sm leading-relaxed text-slate-400">{errorMessage}</p>
+            <p className="text-xs text-slate-600">
+              {secondsLeft > 0
+                ? `Taking you home in ${secondsLeft}s…`
+                : 'Redirecting…'}
             </p>
           </div>
-        </div>
-
-        {/* Return to home button */}
-        <div className="flex justify-center pt-2">
-          <Button onClick={handleReturnHome} className="px-6">
-            Return to Home
-          </Button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Button
+              asChild
+              className="rounded-xl bg-violet-600 px-6 text-white hover:bg-violet-500 border-0"
+            >
+              <Link to="/">Home</Link>
+            </Button>
+            <Button asChild variant="outline" className="rounded-xl border-white/15 bg-transparent text-white hover:bg-white/5">
+              <Link to="/login">Try again</Link>
+            </Button>
+          </div>
         </div>
       </div>
     </div>
