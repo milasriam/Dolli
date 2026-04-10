@@ -460,6 +460,7 @@ def is_valid_referer(referer: str) -> bool:
     allowed_domains = [
         "localhost",
         "127.0.0.1",
+        "dolli.space",  # matches staging.dolli.space, www.dolli.space, etc. (substring check below)
         "amazonaws.com",
         "execute-api.us-east-1.amazonaws.com",
         "lambda-url.us-east-1.on.aws",

@@ -65,6 +65,12 @@ curl -sS -i ${API_URL}/health | sed -n '1,12p'
 
 echo "=== SITE ==="
 curl -sS -I ${SITE_URL} | sed -n '1,12p'
+
+echo "=== CORS preflight (local-login from ${SITE_URL}) ==="
+curl -sSI -X OPTIONS "${API_URL}/api/v1/auth/local-login" \
+  -H "Origin: ${SITE_URL}" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type" | sed -n '1,25p' || true
 REMOTE
 
 echo "✅ Deploy ${TARGET} done"

@@ -25,9 +25,67 @@ def _parse_csv_env(name: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def _infer_dolli_cors_channel() -> str:
+    """staging | prod | dev — used only to fill CORS when env leaves allow_origins empty."""
+    explicit = (os.environ.get("DOLLI_CORS_CHANNEL") or os.environ.get("DEPLOY_CHANNEL") or "").lower()
+    if explicit in ("staging", "stage", "stg"):
+        return "staging"
+    if explicit in ("prod", "production", "live"):
+        return "prod"
+
+    env = (os.environ.get("ENVIRONMENT") or os.environ.get("APP_ENV") or "").lower()
+    if "stag" in env:
+        return "staging"
+    if env in ("prod", "production", "live"):
+        return "prod"
+
+    for key in ("FRONTEND_URL", "VITE_FRONTEND_URL", "BACKEND_PUBLIC_URL", "PYTHON_BACKEND_URL"):
+        val = (os.environ.get(key) or "").lower()
+        if "staging.dolli" in val or "api-staging" in val:
+            return "staging"
+        if "api.dolli.space" in val and "staging" not in val:
+            return "prod"
+
+    return "dev"
+
+
+def _dolli_cors_fallback_origins(channel: str) -> list[str]:
+    """Per-channel defaults so staging API does not accept prod Origin and vice versa."""
+    if channel == "staging":
+        return ["https://staging.dolli.space"]
+    if channel == "prod":
+        return ["https://dolli.space", "https://www.dolli.space"]
+    return [
+        "https://dolli.space",
+        "https://www.dolli.space",
+        "https://staging.dolli.space",
+    ]
+
+
+_LOCAL_DEV_ORIGINS: tuple[str, ...] = (
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+)
+
+
+def _merge_origins_unique(base: list[str], extras: list[str]) -> list[str]:
+    seen = set(base)
+    out = list(base)
+    for item in extras:
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
+
+
 def _build_allowed_origins() -> list[str]:
     explicit_origins = _parse_csv_env("ALLOWED_ORIGINS")
     if explicit_origins:
+        # Operator-defined list only — no automatic mixing of staging/prod.
         return explicit_origins
 
     origins: list[str] = []
@@ -50,16 +108,13 @@ def _build_allowed_origins() -> list[str]:
                 origins.append(http_origin)
 
     if os.environ.get("ENVIRONMENT", "dev").lower() == "dev":
-        for local_origin in (
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:3001",
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://127.0.0.1:5173",
-            "http://localhost:5173",
-        ):
-            if local_origin not in origins:
-                origins.append(local_origin)
+        origins = _merge_origins_unique(origins, list(_LOCAL_DEV_ORIGINS))
+
+    if not origins:
+        channel = _infer_dolli_cors_channel()
+        origins = _merge_origins_unique(origins, _dolli_cors_fallback_origins(channel))
+        if channel == "dev":
+            origins = _merge_origins_unique(origins, list(_LOCAL_DEV_ORIGINS))
 
     return origins
 

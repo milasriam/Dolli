@@ -17,7 +17,19 @@ export default function Login() {
       await authApi.localLogin(email.trim(), password);
       navigate('/profile');
     } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || 'Login failed');
+      const detail = err?.response?.data?.detail;
+      const code = err?.code;
+      if (code === 'ERR_NETWORK' || err?.message === 'Network Error') {
+        setError(
+          'Network error: browser could not reach the API (check CORS, HTTPS, or API URL). Open DevTools → Network for the failing request.',
+        );
+      } else {
+        setError(
+          typeof detail === 'string'
+            ? detail
+            : err?.message || 'Login failed',
+        );
+      }
     } finally {
       setLoading(false);
     }

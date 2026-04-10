@@ -6,6 +6,14 @@ let runtimeConfig: {
 // Configuration loading state
 let configLoading = true;
 
+function isDolliDeployedHost(hostname: string): boolean {
+  return (
+    hostname === 'staging.dolli.space' ||
+    hostname === 'dolli.space' ||
+    hostname === 'www.dolli.space'
+  );
+}
+
 function inferApiBaseURLFromHost(): string {
   if (typeof window === 'undefined') {
     return 'http://127.0.0.1:8000';
@@ -13,6 +21,7 @@ function inferApiBaseURLFromHost(): string {
 
   const { protocol, hostname } = window.location;
 
+  // Prod SPA host → prod API | Staging SPA host → staging API (cross-origin; CORS on API must allow this origin).
   if (hostname === 'dolli.space' || hostname === 'www.dolli.space') {
     return `${protocol}//api.dolli.space`;
   }
@@ -71,37 +80,42 @@ export async function loadRuntimeConfig(): Promise<void> {
   }
 }
 
-// Get current configuration
-export function getConfig() {
-  // If config is still loading, return default config to avoid using stale Vite env vars
+function resolveApiBaseURL(): string {
+  // On real Dolli hosts, never trust /api/config or build-time VITE_* if they point at the wrong API
+  // (misconfigured server env caused staging to call localhost → axios "Network Error").
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (isDolliDeployedHost(host)) {
+      return inferApiBaseURLFromHost();
+    }
+  }
+
   if (configLoading) {
-    console.log('Config still loading, using default config');
-    return defaultConfig;
+    return defaultConfig.API_BASE_URL;
   }
 
-  // First try runtime config (for Lambda)
-  if (runtimeConfig) {
-    console.log('Using runtime config');
-    return runtimeConfig;
+  if (runtimeConfig?.API_BASE_URL) {
+    return runtimeConfig.API_BASE_URL;
   }
 
-  // Then try Vite environment variables (for local development)
   if (import.meta.env.VITE_API_BASE_URL) {
-    const viteConfig = {
-      API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
-    };
-    console.log('Using Vite environment config');
-    return viteConfig;
+    return import.meta.env.VITE_API_BASE_URL as string;
   }
 
-  // Finally fall back to default
-  console.log('Using default config');
-  return defaultConfig;
+  return defaultConfig.API_BASE_URL;
 }
 
-// Dynamic API_BASE_URL getter - this will always return the current config
+// Get current configuration
+export function getConfig() {
+  return {
+    get API_BASE_URL() {
+      return resolveApiBaseURL();
+    },
+  };
+}
+
 export function getAPIBaseURL(): string {
-  return getConfig().API_BASE_URL;
+  return resolveApiBaseURL();
 }
 
 // For backward compatibility, but this should be avoided
