@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { client } from '@/lib/api';
 import Header from '@/components/Header';
+import { SiteFooter } from '@/components/SiteFooter';
 import { Heart, TrendingUp, Users, Share2, Zap, ArrowRight, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -264,26 +265,7 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-white/5 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <Link
-            to="/"
-            className="flex items-center gap-2 group"
-            aria-label="Dolli home"
-          >
-            <img
-              src="/brand/dolli-mark.svg"
-              alt=""
-              width={28}
-              height={28}
-              className="h-7 w-7 shrink-0 drop-shadow-[0_0_12px_rgba(139,92,246,0.4)] group-hover:opacity-90 transition-opacity"
-            />
-            <span className="font-bold text-white">Dolli</span>
-          </Link>
-          <p className="text-sm text-slate-500">© 2026 Dolli. Social-native micro-donations for everyone.</p>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

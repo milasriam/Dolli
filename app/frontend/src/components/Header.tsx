@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Menu, X, Plus, User, BarChart3, Compass, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DolliLogoLink } from '@/components/DolliLogoLink';
 
 export default function Header() {
   const { user, login, logout, loading } = useAuth();
@@ -13,19 +14,7 @@ export default function Header() {
     <header className="fixed top-0 left-0 right-0 z-50 bg-[#0A0A0F]/90 backdrop-blur-xl border-b border-white/5">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 group" aria-label="Dolli home">
-            <img
-              src="/brand/dolli-mark.svg"
-              alt=""
-              width={36}
-              height={36}
-              className="h-9 w-9 shrink-0 drop-shadow-[0_0_14px_rgba(139,92,246,0.45)] group-hover:opacity-90 transition-opacity"
-            />
-            <span className="text-xl font-bold text-white tracking-tight">
-              Dolli
-            </span>
-          </Link>
+          <DolliLogoLink variant="header" />
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-1">
