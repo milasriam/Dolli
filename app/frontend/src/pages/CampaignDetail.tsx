@@ -6,6 +6,7 @@ import { ShareCampaignDialog } from '@/components/ShareCampaignDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import Header from '@/components/Header';
 import { OwnerCampaignControls } from '@/components/OwnerCampaignControls';
+import { CampaignHeroMedia } from '@/components/CampaignHeroMedia';
 import { fetchCampaignOrganizerInsights, type CampaignOrganizerInsights } from '@/lib/campaignOrganizerInsights';
 import { trackClientEvent } from '@/lib/productAnalytics';
 import { toast } from 'sonner';
@@ -384,31 +385,12 @@ export default function CampaignDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           <div className="lg:col-span-3 space-y-6">
             <div className="rounded-2xl overflow-hidden border border-white/5 bg-black">
-              {campaign.video_url ? (
-                <video
-                  src={campaign.video_url}
-                  controls
-                  playsInline
-                  className="w-full h-64 sm:h-80 object-cover"
-                  poster={campaign.image_url || undefined}
-                />
-              ) : campaign.gif_url ? (
-                <img
-                  src={campaign.gif_url}
-                  alt=""
-                  className="w-full h-64 sm:h-80 object-cover"
-                />
-              ) : campaign.image_url ? (
-                <img
-                  src={campaign.image_url}
-                  alt={campaign.title}
-                  className="w-full h-64 sm:h-80 object-cover"
-                />
-              ) : (
-                <div className="w-full h-64 sm:h-80 flex items-center justify-center bg-[#13131A] text-slate-500 text-sm">
-                  No preview image
-                </div>
-              )}
+              <CampaignHeroMedia
+                videoUrl={campaign.video_url}
+                gifUrl={campaign.gif_url}
+                imageUrl={campaign.image_url}
+                title={campaign.title}
+              />
             </div>
 
             <div>

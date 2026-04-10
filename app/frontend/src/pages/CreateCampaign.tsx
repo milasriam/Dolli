@@ -13,6 +13,8 @@ import {
   type CampaignAiStatus,
 } from '@/lib/campaignAiDraft';
 import { uploadCoverFile } from '@/lib/campaignCoverUpload';
+import { uploadCampaignVideoFile } from '@/lib/campaignVideoUpload';
+import { CampaignHeroMedia } from '@/components/CampaignHeroMedia';
 import { normalizePastedCoverImageUrl } from '@/lib/coverImageUrl';
 import { trackClientEvent } from '@/lib/productAnalytics';
 import { CAMPAIGN_CATEGORIES } from '@/lib/campaignCategories';
@@ -76,7 +78,9 @@ export default function CreateCampaign() {
   const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
   const [aiStatus, setAiStatus] = useState<CampaignAiStatus | null>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const [coverUploading, setCoverUploading] = useState(false);
+  const [videoUploading, setVideoUploading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [eligibility, setEligibility] = useState<Awaited<
     ReturnType<typeof fetchCampaignCreateEligibility>
@@ -323,6 +327,27 @@ export default function CreateCampaign() {
     } finally {
       setCoverUploading(false);
       if (coverInputRef.current) coverInputRef.current.value = '';
+    }
+  };
+
+  const handleVideoSelected = async (files: FileList | null) => {
+    const f = files?.[0];
+    if (!f || !f.type.startsWith('video/')) {
+      toast.error('Choose a video file (MP4, WebM, or MOV).');
+      return;
+    }
+    setVideoUploading(true);
+    try {
+      const url = await uploadCampaignVideoFile(f);
+      setForm((p) => ({ ...p, video_url: url }));
+      toast.success('Video uploaded');
+      trackClientEvent('campaign_video_upload', { ok: true });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Video upload failed');
+      trackClientEvent('campaign_video_upload', { ok: false });
+    } finally {
+      setVideoUploading(false);
+      if (videoInputRef.current) videoInputRef.current.value = '';
     }
   };
 
@@ -805,10 +830,10 @@ export default function CreateCampaign() {
               ). Normal “share” Drive links are a web page, not an image — we rewrite common Drive formats on blur.
             </p>
             <p className="text-xs text-amber-200/80">
-              Upload button needs server storage: <code className="text-amber-100/90">OSS_SERVICE_URL</code>,{' '}
+              Upload needs backend cover storage: either <code className="text-amber-100/90">DOLLI_COVER_STORAGE=local</code>{' '}
+              (disk on the API server) or an OSS stack (<code className="text-amber-100/90">OSS_SERVICE_URL</code>,{' '}
               <code className="text-amber-100/90">OSS_API_KEY</code>, <code className="text-amber-100/90">DOLLI_COVER_UPLOAD_BUCKET</code>
-              , and usually <code className="text-amber-100/90">DOLLI_COVER_PUBLIC_BASE_URL</code> on the API host. Until then,
-              paste a URL.
+              ). If upload is disabled here, paste a direct HTTPS image URL.
             </p>
             <div>
               <label className="block text-sm font-semibold text-white mb-2">
@@ -855,12 +880,35 @@ export default function CreateCampaign() {
             </div>
             <div>
               <label className="block text-sm font-semibold text-white mb-2">Short video (optional)</label>
-              <Input
-                value={form.video_url}
-                onChange={(e) => setForm({ ...form, video_url: e.target.value })}
-                placeholder="Direct .mp4 URL (shown above the fold; image used as poster)"
-                className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl h-12"
-              />
+              <p className="text-xs text-slate-500 mb-2">
+                Upload from your phone or paste a link. YouTube and Google Drive “share” links play in an embedded
+                player; a direct <code className="text-slate-400">.mp4</code> / <code className="text-slate-400">.webm</code>{' '}
+                URL uses the browser video player.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  value={form.video_url}
+                  onChange={(e) => setForm({ ...form, video_url: e.target.value })}
+                  placeholder="https://… (YouTube, Drive, or direct .mp4)"
+                  className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl h-12 flex-1"
+                />
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/mp4,video/webm,video/quicktime,video/x-m4v"
+                  className="hidden"
+                  onChange={(e) => void handleVideoSelected(e.target.files)}
+                />
+                <button
+                  type="button"
+                  disabled={videoUploading}
+                  onClick={() => videoInputRef.current?.click()}
+                  className="h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:border-white/20 transition-all flex items-center gap-2 text-sm disabled:opacity-50"
+                >
+                  <Upload className="w-4 h-4" />
+                  {videoUploading ? '…' : ''}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -925,30 +973,16 @@ export default function CreateCampaign() {
             </div>
             <div className="bg-[#13131A] rounded-2xl border border-white/5 overflow-hidden">
               <div className="relative h-40 overflow-hidden bg-black">
-                {form.video_url.trim() ? (
-                  <video
-                    src={form.video_url.trim()}
-                    controls
-                    playsInline
-                    className="w-full h-full object-cover"
-                    poster={form.image_url || undefined}
-                  />
-                ) : form.gif_url.trim() ? (
-                  <img
-                    src={form.gif_url.trim()}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <img
-                    src={
-                      form.image_url ||
-                      'https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?w=1200&q=80'
-                    }
-                    alt="Preview"
-                    className="w-full h-full object-cover"
-                  />
-                )}
+                <CampaignHeroMedia
+                  className="w-full h-full"
+                  videoUrl={form.video_url.trim() || undefined}
+                  gifUrl={form.gif_url.trim() || undefined}
+                  imageUrl={
+                    form.image_url.trim() ||
+                    'https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?w=1200&q=80'
+                  }
+                  title="Preview"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#13131A] via-transparent to-transparent pointer-events-none" />
                 {selectedCategory && (
                   <div className="absolute top-3 left-3">

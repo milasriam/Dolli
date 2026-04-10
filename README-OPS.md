@@ -130,15 +130,35 @@ Then `systemctl restart dolli-backend-staging`. **Do not** enable this on produc
 
 ### Staging: cover image upload (Create Campaign → upload button)
 
-The **upload** control calls `POST /api/v1/entities/campaigns/presign-cover`, which requires **object storage** in env (same pattern as prod):
+The **upload** control calls `POST /api/v1/entities/campaigns/presign-cover`, then the browser **PUTs** the file to `upload_url` and stores `access_url` on the campaign.
 
-- `OSS_SERVICE_URL` and `OSS_API_KEY` — backend talks to your OSS API (`StorageService`).
-- `DOLLI_COVER_UPLOAD_BUCKET` — bucket name for campaign cover objects.
-- `DOLLI_COVER_PUBLIC_BASE_URL` (optional but typical) — public HTTPS base for `access_url` if the presign response does not include a full URL.
+**Option A — local disk (no external OSS API, typical for staging)**
 
-Until these are set, the API returns **503** with *“Cover upload is not configured…”* — users should **paste a direct `https://…` image URL** instead.
+On the server:
 
-**Google Drive:** a normal “anyone with the link” URL opens a **web page**, not raw bytes. Use a direct form such as `https://drive.google.com/uc?export=view&id=FILE_ID`, or host the image on a CDN. The app now rewrites common Drive `/file/d/…/view` and `/open?id=…` links to the `uc?export=view` form on save and when the cover field blurs in the UI.
+```bash
+mkdir -p /var/lib/dolli/cover-media
+```
+
+Nginx must allow large **PUT** bodies for short videos (e.g. `client_max_body_size 128m;` on the API `server` / `location` that proxies to Uvicorn). Reload nginx after editing.
+
+In `/etc/dolli/staging.env` (then `systemctl restart dolli-backend-staging`):
+
+- `DOLLI_COVER_STORAGE=local`
+- `DOLLI_COVER_UPLOAD_BUCKET=dolli-staging-covers` (logical label; object keys still use `campaign-covers/…`)
+- `DOLLI_COVER_LOCAL_ROOT=/var/lib/dolli/cover-media`
+- `DOLLI_COVER_PUBLIC_BASE_URL=https://api-staging.dolli.space` (must match the public API origin used in the browser for image URLs; can reuse `BACKEND_PUBLIC_URL` if already set and correct)
+- `JWT_SECRET_KEY` must be set (used to sign short-lived upload tokens; override with `DOLLI_COVER_LOCAL_SIGNING_SECRET` if you prefer).
+
+**Option B — remote OSS (prod-style)**
+
+- `OSS_SERVICE_URL` and `OSS_API_KEY` — backend calls your OSS HTTP API (`StorageService`).
+- `DOLLI_COVER_UPLOAD_BUCKET` — bucket name.
+- `DOLLI_COVER_PUBLIC_BASE_URL` — if the presign JSON does not return a full public URL.
+
+If neither mode is configured, the API returns **503** (*Cover upload is not configured…*) — paste a direct `https://…` image URL instead.
+
+**Google Drive:** a normal “anyone with the link” URL is an HTML page, not a raw image. Use `https://drive.google.com/uc?export=view&id=FILE_ID` or another CDN. The app rewrites common Drive `/file/d/…/view` and `/open?id=…` links on blur / save.
 
 ### Staging: campaign AI (Create Campaign → Generate draft)
 

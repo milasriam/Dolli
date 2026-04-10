@@ -242,6 +242,70 @@ class PresignCoverResponse(BaseModel):
     expires_at: str = ""
 
 
+async def _presign_campaign_media_response(
+    current_user: UserResponse,
+    object_key: str,
+    *,
+    paste_hint: str,
+) -> PresignCoverResponse:
+    """Shared presign for cover + short video blobs (OSS or local disk)."""
+    bucket = (os.environ.get("DOLLI_COVER_UPLOAD_BUCKET") or "").strip()
+    if not bucket:
+        raise HTTPException(
+            status_code=503,
+            detail=paste_hint,
+        )
+
+    if cover_local_enabled():
+        try:
+            token = mint_upload_token(user_id=str(current_user.id), object_key=object_key)
+        except ValueError as e:
+            logger.warning("local campaign media presign: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e),
+            ) from e
+        public = resolve_public_base()
+        if not public:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Local uploads need DOLLI_COVER_PUBLIC_BASE_URL or BACKEND_PUBLIC_URL "
+                    "(absolute HTTPS API base, no path)."
+                ),
+            )
+        upload_url = f"{public}/api/v1/entities/campaigns/cover-local-upload/{token}"
+        access_url = f"{public}/api/v1/entities/campaigns/cover-media?k={quote(object_key, safe='')}"
+        return PresignCoverResponse(
+            upload_url=upload_url,
+            access_url=access_url,
+            object_key=object_key,
+            expires_at="",
+        )
+
+    base = (os.environ.get("DOLLI_COVER_PUBLIC_BASE_URL") or "").rstrip("/")
+    try:
+        svc = StorageService()
+        out = await svc.create_upload_url(FileUpDownRequest(bucket_name=bucket, object_key=object_key))
+    except ValueError as e:
+        logger.warning("presign campaign media storage misconfigured: %s", e)
+        raise HTTPException(status_code=503, detail="File storage is not available.") from e
+    except Exception as e:
+        logger.exception("presign campaign media failed: %s", e)
+        raise HTTPException(status_code=502, detail="Could not create upload URL.") from e
+
+    access = (out.access_url or "").strip()
+    if not access and base:
+        access = f"{base}/{object_key}"
+
+    return PresignCoverResponse(
+        upload_url=out.upload_url,
+        access_url=access,
+        object_key=object_key,
+        expires_at=out.expires_at or "",
+    )
+
+
 class CampaignsBatchCreateRequest(BaseModel):
     """Batch create request"""
     items: List[CampaignsData]
@@ -317,12 +381,6 @@ async def presign_campaign_cover(
     - **Local disk** (staging/small installs): `DOLLI_COVER_STORAGE=local` + same bucket name +
       `DOLLI_COVER_PUBLIC_BASE_URL` or `BACKEND_PUBLIC_URL` + `JWT_SECRET_KEY` for signing.
     """
-    bucket = (os.environ.get("DOLLI_COVER_UPLOAD_BUCKET") or "").strip()
-    if not bucket:
-        raise HTTPException(
-            status_code=503,
-            detail="Cover upload is not configured on this server. Paste an https image URL instead.",
-        )
     raw_name = body.filename.strip()
     ext = ""
     if "." in raw_name:
@@ -334,53 +392,37 @@ async def presign_campaign_cover(
     safe_stem = re.sub(r"[^a-zA-Z0-9._-]+", "-", raw_name.rsplit(".", 1)[0])[:80] or "cover"
     object_key = f"campaign-covers/{current_user.id}/{uuid.uuid4().hex}-{safe_stem}.{ext}"
 
-    if cover_local_enabled():
-        try:
-            token = mint_upload_token(user_id=str(current_user.id), object_key=object_key)
-        except ValueError as e:
-            logger.warning("local cover presign: %s", e)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=str(e),
-            ) from e
-        public = resolve_public_base()
-        if not public:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=(
-                    "Local cover uploads need DOLLI_COVER_PUBLIC_BASE_URL or BACKEND_PUBLIC_URL "
-                    "(absolute HTTPS API base, no path)."
-                ),
-            )
-        upload_url = f"{public}/api/v1/entities/campaigns/cover-local-upload/{token}"
-        access_url = f"{public}/api/v1/entities/campaigns/cover-media?k={quote(object_key, safe='')}"
-        return PresignCoverResponse(
-            upload_url=upload_url,
-            access_url=access_url,
-            object_key=object_key,
-            expires_at="",
-        )
+    return await _presign_campaign_media_response(
+        current_user,
+        object_key,
+        paste_hint="Cover upload is not configured on this server. Paste an https image URL instead.",
+    )
 
-    base = (os.environ.get("DOLLI_COVER_PUBLIC_BASE_URL") or "").rstrip("/")
-    try:
-        svc = StorageService()
-        out = await svc.create_upload_url(FileUpDownRequest(bucket_name=bucket, object_key=object_key))
-    except ValueError as e:
-        logger.warning("presign cover storage misconfigured: %s", e)
-        raise HTTPException(status_code=503, detail="File storage is not available.") from e
-    except Exception as e:
-        logger.exception("presign cover failed: %s", e)
-        raise HTTPException(status_code=502, detail="Could not create upload URL.") from e
 
-    access = (out.access_url or "").strip()
-    if not access and base:
-        access = f"{base}/{object_key}"
+@router.post("/presign-video", response_model=PresignCoverResponse)
+async def presign_campaign_video(
+    body: PresignCoverRequest,
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Presigned PUT for a short campaign video (mp4/webm/mov). Same storage env as cover uploads.
+    """
+    raw_name = body.filename.strip()
+    ext = "mp4"
+    if "." in raw_name:
+        cand = raw_name.rsplit(".", 1)[-1].lower()
+        if cand in ("mp4", "webm", "mov", "m4v", "ogv"):
+            ext = cand
+    safe_stem = re.sub(r"[^a-zA-Z0-9._-]+", "-", raw_name.rsplit(".", 1)[0])[:80] or "video"
+    object_key = f"campaign-videos/{current_user.id}/{uuid.uuid4().hex}-{safe_stem}.{ext}"
 
-    return PresignCoverResponse(
-        upload_url=out.upload_url,
-        access_url=access,
-        object_key=object_key,
-        expires_at=out.expires_at or "",
+    return await _presign_campaign_media_response(
+        current_user,
+        object_key,
+        paste_hint=(
+            "Video upload is not configured on this server. "
+            "Paste a direct .mp4 / .webm URL or a YouTube link."
+        ),
     )
 
 
@@ -408,7 +450,7 @@ async def cover_local_upload_put(token: str, request: Request):
 
 @router.get("/cover-media")
 async def cover_local_media_get(k: str = Query(..., min_length=16, max_length=500)):
-    """Public GET for a cover stored on local disk (local cover mode)."""
+    """Public GET for cover or short video bytes stored on local disk (local media mode)."""
     try:
         path = safe_media_path(k)
     except ValueError:
