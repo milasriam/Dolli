@@ -1,0 +1,121 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import Header from '@/components/Header';
+import { PageHeader, PageHeaderIconFrame } from '@/components/PageHeader';
+import { SiteFooter } from '@/components/SiteFooter';
+import { useAuth } from '@/contexts/AuthContext';
+import { fetchMyFriends, type FriendBrief } from '@/lib/friends';
+import { HeartHandshake, Search } from 'lucide-react';
+
+export default function Friends() {
+  const { user, login } = useAuth();
+  const [items, setItems] = useState<FriendBrief[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) {
+      setItems([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const res = await fetchMyFriends();
+      if (cancelled) return;
+      setItems(res?.items ?? []);
+      setTotal(res?.total ?? 0);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+        <Header />
+        <div className="mx-auto w-full max-w-lg flex-1 px-4 pb-16 pt-24 text-center">
+          <HeartHandshake className="w-14 h-14 text-sky-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold mb-2">Friends on Dolli</h1>
+          <p className="text-slate-400 text-sm mb-6">
+            Friends are mutual follows — you and another member both follow each other. Sign in to see yours.
+          </p>
+          <button
+            type="button"
+            onClick={() => login()}
+            className="rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-3"
+          >
+            Sign in
+          </button>
+        </div>
+        <SiteFooter />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col bg-[#0A0A0F] text-white">
+      <Header />
+      <div className="mx-auto w-full max-w-2xl flex-1 px-4 pb-20 pt-24 sm:px-6">
+        <PageHeader
+          icon={
+            <PageHeaderIconFrame className="border-sky-500/25 bg-sky-500/15">
+              <HeartHandshake className="h-6 w-6 text-sky-300" aria-hidden />
+            </PageHeaderIconFrame>
+          }
+          title="Friends"
+          description={`Mutual follows (${total.toLocaleString()}). Activity from friends is in Explore → Friends.`}
+          auxiliary={
+            <Link
+              to="/search/users"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-violet-300 transition-colors hover:text-violet-200"
+            >
+              <Search className="h-4 w-4" aria-hidden />
+              Find people &amp; orgs
+            </Link>
+          }
+        />
+
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-16 rounded-xl bg-white/5 animate-pulse" />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
+          <div className="rounded-2xl border border-white/10 bg-[#13131A] px-6 py-12 text-center">
+            <p className="text-slate-300 font-medium mb-2">No friends yet</p>
+            <p className="text-sm text-slate-500">
+              Follow someone from a fundraiser or People search — when they follow you back, you’ll both show up here.
+            </p>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {items.map((row) => (
+              <li
+                key={row.user_id}
+                className="rounded-xl border border-white/10 bg-[#13131A] px-4 py-3 flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="font-semibold text-white truncate">{row.name?.trim() || 'Dolli member'}</p>
+                  <p className="text-[11px] text-slate-500 truncate">Mutual follow</p>
+                </div>
+                <Link
+                  to={`/search/users?q=${encodeURIComponent(row.name?.trim() || row.user_id)}`}
+                  className="text-xs font-semibold text-violet-300 hover:text-violet-200 shrink-0"
+                >
+                  Search
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <SiteFooter />
+    </div>
+  );
+}
