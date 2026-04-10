@@ -5,7 +5,23 @@ import pkgutil
 import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import urlparse
+
+
+def _bootstrap_dotenv() -> None:
+    """Load app/backend/.env then app/.env so local OPENAI_API_KEY works (systemd env still wins if already set)."""
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    here = Path(__file__).resolve().parent
+    for path in (here / ".env", here.parent / ".env"):
+        if path.is_file():
+            load_dotenv(path, override=False)
+
+
+_bootstrap_dotenv()
 
 from core.config import settings
 from fastapi import FastAPI, HTTPException, Request, status

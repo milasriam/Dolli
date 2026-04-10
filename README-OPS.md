@@ -49,7 +49,8 @@ Then on server:
 
 ```bash
 cd /opt/dolli/app/app/backend
-/opt/dolli/venv/bin/alembic upgrade head
+set -a && source /etc/dolli/staging.env && set +a   # or prod.env — must export DATABASE_URL
+/opt/dolli/venv/bin/python -m alembic upgrade head
 cd /opt/dolli/app/app/frontend
 npm install
 npm run build
@@ -126,6 +127,47 @@ To test **Create campaign** from the UI without a prior paid donation, set in `/
 `ALLOW_CAMPAIGN_CREATE_WITHOUT_DONATION=true`
 
 Then `systemctl restart dolli-backend-staging`. **Do not** enable this on production — there the give-first rule stays.
+
+### Staging: campaign AI (Create Campaign → Generate draft)
+
+The UI calls `GET /api/v1/campaigns/ai-status`. If `hub_configured` is false, the orange banner appears. Configure **one** of the following in `/etc/dolli/staging.env`, then `systemctl restart dolli-backend-staging`:
+
+- **Dolli names:** `APP_AI_BASE_URL` (OpenAI-compatible API root, e.g. `https://api.openai.com/v1`) and `APP_AI_KEY`.
+- **Common alias:** `OPENAI_API_KEY` only — base URL defaults to `https://api.openai.com/v1`. For DeepSeek or another host, set `OPENAI_BASE_URL` (or `APP_AI_BASE_URL`) to that provider’s base URL.
+
+Optional: `ENABLE_CAMPAIGN_AI=false` turns the feature off explicitly.
+
+Optional: `CAMPAIGN_AI_MODEL` (default `gpt-4o-mini`) — must match a model id your provider exposes; the SPA reads the effective value from `GET /api/v1/campaigns/ai-status`.
+
+#### Free OpenAI-compatible provider for staging (Groq — recommended to unblock QA)
+
+Use this when the OpenAI account has **no quota** (`insufficient_quota`) but you need to confirm Create Campaign → **Generate full draft** works end-to-end.
+
+1. **Create a Groq API key** (free tier, subject to Groq’s current limits): [Groq Console](https://console.groq.com/) → **API Keys** → create key (starts with `gsk_`).
+2. **On the staging server**, edit `/etc/dolli/staging.env`. The backend resolves **`APP_AI_*` before `OPENAI_*`** for both URL and key — if `APP_AI_BASE_URL` / `APP_AI_KEY` are still set for OpenAI, **remove them or repoint them to Groq** so a mix of OpenAI key + Groq URL cannot happen. Then set:
+   - `OPENAI_BASE_URL=https://api.groq.com/openai/v1`
+   - `OPENAI_API_KEY=<your gsk_... key>`
+   - `CAMPAIGN_AI_MODEL=llama-3.1-8b-instant`  
+     (Other ids: see [Groq models](https://console.groq.com/docs/models) — the id must exist on Groq, not `gpt-4o-mini` unless Groq lists it.)
+3. **Restart backend:** `systemctl restart dolli-backend-staging`  
+   Or from your Mac (after `app/backend/.env` is saved with the same three variables): `python3 scripts/sync_campaign_ai_env_to_staging.py` — writes `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `CAMPAIGN_AI_MODEL` to staging and restarts the service (removes conflicting `APP_AI_*` lines on the server).
+4. **Verify:**
+   - `curl -sS https://api-staging.dolli.space/api/v1/campaigns/ai-status` → `hub_configured` should be `true` and `default_model` should match `CAMPAIGN_AI_MODEL`.
+   - In the browser on staging: Create Campaign → describe cause → **Generate full draft** — should return a draft or a clear JSON/validation error from the model, not quota errors.
+
+**Local dev:** same three variables in `app/backend/.env` (never commit real keys).
+
+When OpenAI billing is fixed, switch back: `OPENAI_BASE_URL=https://api.openai.com/v1`, your `sk-...` key, and `CAMPAIGN_AI_MODEL=gpt-4o-mini` (or your chosen OpenAI model id).
+
+#### Staging fallback: Ollama on the same VPS (no external LLM bill)
+
+If you need campaign AI without Groq/OpenAI quota, the staging box can run **Ollama** on `127.0.0.1:11434` (CPU-only is fine for smoke tests). After `ollama pull tinyllama` (or another chat model), set in `/etc/dolli/staging.env`:
+
+- `OPENAI_BASE_URL=http://127.0.0.1:11434/v1`
+- `OPENAI_API_KEY=ollama` (placeholder; Ollama ignores it)
+- `CAMPAIGN_AI_MODEL=tinyllama` (must match `ollama list`)
+
+Then `systemctl restart dolli-backend-staging`. Smaller models may occasionally miss strict JSON for `/ai-draft`; use a larger tag on a bigger VM if that happens.
 
 ### Staging SQLite (avoid `readonly database` after rsync)
 

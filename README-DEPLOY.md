@@ -49,11 +49,13 @@ From project root:
 
 ## What deploy.sh does
 
-1. Syncs source code to server (/opt/dolli/app) via rsync.
-2. Builds frontend with correct VITE_API_BASE_URL for selected environment.
-3. Publishes built frontend to /opt/dolli/www/staging or /opt/dolli/www/prod.
-4. Restarts corresponding backend service (dolli-backend-staging or dolli-backend-prod).
-5. Runs health checks for API and site.
+1. Syncs source code to server (`/opt/dolli/app`) via rsync.
+2. Sources `/etc/dolli/staging.env` or `/etc/dolli/prod.env` (when present) so `DATABASE_URL` is available.
+3. Installs backend requirements into `/opt/dolli/venv` and runs Alembic from `app/backend`. If the database has **no** `alembic_version` row yet (legacy SQLite), the script **stamps** revision `e7b2a1c0d3e4` once, then runs **`upgrade head`** (so only newer migrations such as `client_product_events` apply).
+4. Builds the frontend with the correct `VITE_API_BASE_URL` for the selected environment.
+5. Publishes the built frontend to `/opt/dolli/www/staging` or `/opt/dolli/www/prod`.
+6. Restarts the corresponding backend service (`dolli-backend-staging` or `dolli-backend-prod`).
+7. Runs health checks for the API and site.
 
 ## Quick Post-Deploy Checks
 
@@ -67,6 +69,16 @@ From project root:
 
 Expected API response:
 {"status":"healthy"}
+
+## Sync OpenAI key to staging (local `.env` only)
+
+After you change `OPENAI_API_KEY` in `app/backend/.env` (never commit that file), push the key to the server and restart staging:
+
+```bash
+python3 scripts/sync_openai_key_to_staging.py
+```
+
+Uses the same SSH defaults as deploy (port 2222, `~/.ssh/id_ed25519`). Override with `DOLLI_STAGING_SSH`, `DOLLI_STAGING_SSH_PORT`, `DOLLI_STAGING_SSH_KEY` if needed. Requires `python-dotenv` in the environment you use to run the script.
 
 ## Rollback (quick)
 

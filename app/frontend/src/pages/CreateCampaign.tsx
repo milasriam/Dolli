@@ -96,6 +96,7 @@ export default function CreateCampaign() {
 
   const user = USE_MOCK_DATA ? MOCK_USER : authUser;
   const isLoading = USE_MOCK_DATA ? false : authLoading;
+  const campaignAiModel = aiStatus?.default_model ?? 'gpt-4o-mini';
 
   // Auto-show preview when enough fields are filled
   useEffect(() => {
@@ -227,7 +228,7 @@ export default function CreateCampaign() {
     }
 
     try {
-      const draft = await fetchCampaignAiDraft(aiPrompt.trim(), 'deepseek-v3.2');
+      const draft = await fetchCampaignAiDraft(aiPrompt.trim(), campaignAiModel);
       setForm((prev) => ({
         ...prev,
         title: draft.title || prev.title,
@@ -255,7 +256,14 @@ export default function CreateCampaign() {
       } else if (e.status === 429) {
         toast.error(detail);
       } else if (e.status === 503) {
-        toast.error('AI is not configured. Fill the form manually or try later.');
+        const looksUnconfigured =
+          detail === 'AI service is not configured.' ||
+          detail.toLowerCase().includes('not configured');
+        toast.error(
+          looksUnconfigured
+            ? 'AI is not configured. Fill the form manually or try later.'
+            : detail,
+        );
       } else {
         toast.error(detail);
       }
@@ -279,7 +287,7 @@ export default function CreateCampaign() {
           : field === 'description'
             ? form.description
             : form.impact_statement;
-      const out = await fetchCampaignAiRefine(field, ctx, cur, 'deepseek-v3.2');
+      const out = await fetchCampaignAiRefine(field, ctx, cur, campaignAiModel);
       if (field === 'title') setForm((p) => ({ ...p, title: out.value.slice(0, 60) }));
       if (field === 'description') setForm((p) => ({ ...p, description: out.value.slice(0, 200) }));
       if (field === 'impact_statement') setForm((p) => ({ ...p, impact_statement: out.value.slice(0, 80) }));
@@ -586,7 +594,7 @@ export default function CreateCampaign() {
           <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-100 leading-relaxed">
             {!aiStatus.enabled
               ? 'AI assistant is turned off on this server. Write manually — everything still works.'
-              : 'AI backend is not configured (missing API keys). Use manual fields below.'}
+              : 'AI isn’t enabled on this server yet (no LLM API key in environment). Fill the form manually, or ask ops to set OPENAI_API_KEY or APP_AI_KEY in staging.env and restart the backend.'}
           </div>
         )}
 

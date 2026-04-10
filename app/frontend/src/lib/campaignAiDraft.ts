@@ -4,6 +4,7 @@ import { authApi } from '@/lib/auth';
 export type CampaignAiStatus = {
   enabled: boolean;
   hub_configured: boolean;
+  default_model?: string;
 };
 
 export async function fetchCampaignAiStatus(): Promise<CampaignAiStatus> {
@@ -12,6 +13,7 @@ export async function fetchCampaignAiStatus(): Promise<CampaignAiStatus> {
   return {
     enabled: Boolean(data.enabled),
     hub_configured: Boolean(data.hub_configured),
+    default_model: typeof data.default_model === 'string' ? data.default_model : undefined,
   };
 }
 
@@ -29,7 +31,7 @@ export type CampaignAiDraft = {
 
 export async function fetchCampaignAiDraft(
   prompt: string,
-  model = 'deepseek-v3.2',
+  model = 'gpt-4o-mini',
 ): Promise<CampaignAiDraft> {
   const token = authApi.getStoredToken();
   if (!token) throw new Error('Not authenticated');
@@ -61,7 +63,7 @@ export async function fetchCampaignAiRefine(
   field: AiRefineField,
   storyContext: string,
   currentValue: string,
-  model = 'deepseek-v3.2',
+  model = 'gpt-4o-mini',
 ): Promise<{ value: string; normalization_notes?: string[] }> {
   const token = authApi.getStoredToken();
   if (!token) throw new Error('Not authenticated');

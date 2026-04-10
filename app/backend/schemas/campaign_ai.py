@@ -10,7 +10,7 @@ from core.campaign_categories import CAMPAIGN_CATEGORY_SLUGS
 class CampaignAiDraftRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=4000)
     model: str = Field(
-        default="deepseek-v3.2",
+        default="gpt-4o-mini",
         description="Passed through to the AI hub (must be allowed by your provider).",
     )
 
@@ -41,7 +41,7 @@ class CampaignAiRefineRequest(BaseModel):
     story_context: str = Field(..., min_length=1, max_length=4000)
     current_value: str = Field(default="", max_length=2000)
     model: str = Field(
-        default="deepseek-v3.2",
+        default="gpt-4o-mini",
         description="Passed through to the AI hub.",
     )
 
@@ -56,3 +56,6 @@ class CampaignAiStatusResponse(BaseModel):
 
     enabled: bool
     hub_configured: bool
+    default_model: str = Field(
+        description="Model id to send to the OpenAI-compatible API (must exist at your provider).",
+    )

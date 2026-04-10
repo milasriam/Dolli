@@ -35,6 +35,42 @@ echo "===> Remote deploy: ${TARGET}"
 ssh -p "${SSH_PORT}" -i "${SSH_KEY}" "${SSH_HOST}" bash -s <<REMOTE
 set -euo pipefail
 
+VENV_PY="/opt/dolli/venv/bin/python"
+VENV_PIP="/opt/dolli/venv/bin/pip"
+
+if [[ "${TARGET}" == "staging" ]]; then
+  ENV_FILE="/etc/dolli/staging.env"
+else
+  ENV_FILE="/etc/dolli/prod.env"
+fi
+# Do not source the whole env file — it may contain non-shell lines.
+if [[ -f "\${ENV_FILE}" ]]; then
+  DB_LINE=\$(grep -E '^[[:space:]]*(export[[:space:]]+)?DATABASE_URL=' "\${ENV_FILE}" | tail -n1 || true)
+  if [[ -z "\${DB_LINE}" ]]; then
+    echo "ERROR: DATABASE_URL not found in \${ENV_FILE}"
+    exit 1
+  fi
+  DB_VAL=\${DB_LINE#*=}
+  DB_VAL=\${DB_VAL%\$'\r'}
+  DB_VAL=\$(printf '%s' "\${DB_VAL}" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+  export DATABASE_URL="\${DB_VAL}"
+  echo "===> DATABASE_URL loaded from \${ENV_FILE} for Alembic"
+else
+  echo "ERROR: \${ENV_FILE} not found — cannot run migrations"
+  exit 1
+fi
+
+echo "===> Backend dependencies + migrations"
+cd ${REMOTE_APP}/app/backend
+"\${VENV_PIP}" install -q -r requirements.txt
+# Legacy SQLite DBs may have tables but no alembic_version row; first migration would fail with "already exists".
+CUR_REV=\$("\${VENV_PY}" -m alembic current 2>/dev/null | grep -oE '[a-f0-9]{12}' | tail -n1 || true)
+if [[ -z "\${CUR_REV}" ]]; then
+  echo "===> No Alembic revision in DB; stamping e7b2a1c0d3e4 (schema up to campaign media cols), then upgrading"
+  "\${VENV_PY}" -m alembic stamp e7b2a1c0d3e4
+fi
+"\${VENV_PY}" -m alembic upgrade head
+
 cd ${REMOTE_APP}/app/frontend
 npm install
 VITE_API_BASE_URL=${API_URL} VITE_PAYMENTS_ENABLED=${VITE_PAYMENTS_ENABLED:-false} npm run build

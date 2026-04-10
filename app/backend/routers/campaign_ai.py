@@ -6,6 +6,13 @@ import logging
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    AuthenticationError,
+    BadRequestError,
+    RateLimitError,
+)
 
 from core.campaign_ai_limits import record_campaign_ai_request
 from dependencies.auth import get_current_user
@@ -17,6 +24,7 @@ from schemas.campaign_ai import (
     CampaignAiRefineResponse,
     CampaignAiStatusResponse,
 )
+from core.ai_credentials import is_ai_hub_configured
 from services.campaign_ai import generate_campaign_ai_draft, generate_campaign_ai_refine
 
 logger = logging.getLogger(__name__)
@@ -29,11 +37,47 @@ def _campaign_ai_enabled() -> bool:
     return raw not in ("0", "false", "no", "off")
 
 
+def _campaign_ai_default_model() -> str:
+    return (os.environ.get("CAMPAIGN_AI_MODEL") or "gpt-4o-mini").strip() or "gpt-4o-mini"
+
+
 def _ai_hub_env_configured() -> bool:
-    return bool(
-        (os.environ.get("APP_AI_BASE_URL") or "").strip()
-        and (os.environ.get("APP_AI_KEY") or "").strip()
-    )
+    return is_ai_hub_configured()
+
+
+def _http_for_openai_error(exc: BaseException) -> HTTPException | None:
+    """Turn OpenAI SDK errors into HTTP errors with actionable detail text."""
+    if isinstance(exc, RateLimitError):
+        low = str(exc).lower()
+        if "insufficient_quota" in low:
+            return HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    "OpenAI has no usable quota for this API key (billing or limits). "
+                    "See https://platform.openai.com/account/billing — then try again."
+                ),
+            )
+        return HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="The AI provider is rate-limiting requests. Wait a minute and try again.",
+        )
+    if isinstance(exc, AuthenticationError):
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The AI provider rejected the API key. Check server configuration.",
+        )
+    if isinstance(exc, (APIConnectionError, APITimeoutError)):
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not reach the AI provider. Try again later.",
+        )
+    if isinstance(exc, BadRequestError):
+        logger.info("Campaign AI provider BadRequest: %s", exc)
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="The AI provider rejected the request (model or parameters). Try again or change the model.",
+        )
+    return None
 
 
 @router.get("/ai-status", response_model=CampaignAiStatusResponse)
@@ -42,6 +86,7 @@ async def get_campaign_ai_status() -> CampaignAiStatusResponse:
     return CampaignAiStatusResponse(
         enabled=_campaign_ai_enabled(),
         hub_configured=_ai_hub_env_configured(),
+        default_model=_campaign_ai_default_model(),
     )
 
 
@@ -78,6 +123,17 @@ async def post_campaign_ai_draft(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=msg,
         ) from e
+    except (RateLimitError, AuthenticationError, APIConnectionError, APITimeoutError, BadRequestError) as e:
+        mapped = _http_for_openai_error(e)
+        if mapped:
+            if isinstance(e, RateLimitError):
+                logger.warning("Campaign AI draft rate limit: %s", e)
+            elif isinstance(e, AuthenticationError):
+                logger.error("Campaign AI draft auth error: %s", e)
+            else:
+                logger.info("Campaign AI draft provider error: %s", e)
+            raise mapped from e
+        raise
     except Exception as e:
         logger.exception("Campaign AI failed: %s", e)
         raise HTTPException(
@@ -124,6 +180,17 @@ async def post_campaign_ai_refine(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=msg,
         ) from e
+    except (RateLimitError, AuthenticationError, APIConnectionError, APITimeoutError, BadRequestError) as e:
+        mapped = _http_for_openai_error(e)
+        if mapped:
+            if isinstance(e, RateLimitError):
+                logger.warning("Campaign AI refine rate limit: %s", e)
+            elif isinstance(e, AuthenticationError):
+                logger.error("Campaign AI refine auth error: %s", e)
+            else:
+                logger.info("Campaign AI refine provider error: %s", e)
+            raise mapped from e
+        raise
     except Exception as e:
         logger.exception("Campaign AI refine failed: %s", e)
         raise HTTPException(

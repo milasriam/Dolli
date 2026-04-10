@@ -4,6 +4,7 @@
 
 import asyncio
 import importlib
+import os
 import pkgutil
 from logging.config import fileConfig
 
@@ -21,6 +22,13 @@ config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+_db_url = (os.environ.get("DATABASE_URL") or "").strip() or (config.get_main_option("sqlalchemy.url") or "").strip()
+if not _db_url:
+    raise RuntimeError(
+        "DATABASE_URL must be set in the environment for Alembic (or set sqlalchemy.url in alembic.ini)."
+    )
+config.set_main_option("sqlalchemy.url", _db_url)
 
 target_metadata = Base.metadata
 

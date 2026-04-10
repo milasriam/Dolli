@@ -8,7 +8,7 @@ import io
 import logging
 from typing import AsyncGenerator
 
-from core.config import settings
+from core.ai_credentials import resolve_openai_compatible_config
 from openai import AsyncOpenAI
 from schemas.aihub import GenImgRequest, GenImgResponse, GenTxtRequest, GenTxtResponse
 
@@ -23,12 +23,16 @@ class AIHubService:
     """AI Hub service class that wraps LLM calls based on the OpenAI SDK."""
 
     def __init__(self):
-        if not settings.app_ai_base_url or not settings.app_ai_key:
-            raise ValueError("AI service not configured. Set APP_AI_BASE_URL and APP_AI_KEY.")
+        base, key = resolve_openai_compatible_config()
+        if not base or not key:
+            raise ValueError(
+                "AI service not configured. Set APP_AI_BASE_URL and APP_AI_KEY, "
+                "or OPENAI_API_KEY (and optionally OPENAI_BASE_URL for non-OpenAI hosts)."
+            )
 
         self.client = AsyncOpenAI(
-            api_key=settings.app_ai_key,
-            base_url=settings.app_ai_base_url.rstrip("/"),
+            api_key=key,
+            base_url=base.rstrip("/"),
         )
 
     def _convert_message(self, msg) -> dict:
