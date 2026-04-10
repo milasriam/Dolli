@@ -1,13 +1,13 @@
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case
 from typing import List, Optional
 
 from core.database import get_db
-from dependencies.auth import get_current_user
+from dependencies.auth import get_current_user, get_optional_current_user
 from schemas.auth import UserResponse
 from models.donations import Donations
 from models.campaigns import Campaigns
@@ -213,7 +213,7 @@ async def create_referral(
 
         return ReferralResponse(
             referral_token=token,
-            share_url=f"/campaign/{data.campaign_id}?ref={token}",
+            share_url=f"/api/share/campaign/{data.campaign_id}?ref={token}",
         )
     except Exception as e:
         logger.error(f"Error creating referral: {e}")
@@ -238,3 +238,26 @@ async def track_referral_click(
     except Exception as e:
         logger.error(f"Error tracking click: {e}")
         return {"status": "error"}
+
+
+class ClientEventBody(BaseModel):
+    event: str = Field(..., max_length=64)
+    payload: dict = Field(default_factory=dict)
+
+
+@router.post("/client-event", status_code=204)
+async def client_event(
+    body: ClientEventBody,
+    request: Request,
+    viewer: Optional[UserResponse] = Depends(get_optional_current_user),
+):
+    """Lightweight product analytics (logged server-side; extend to warehouse later)."""
+    uid = viewer.id if viewer else None
+    logger.info(
+        "client_event event=%r user_id=%r ip=%r payload=%r",
+        body.event,
+        uid,
+        request.client.host if request.client else None,
+        body.payload,
+    )
+    return Response(status_code=204)

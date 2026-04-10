@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { client } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import Header from '@/components/Header';
 import {
   BarChart3, TrendingUp, Users, Share2, Heart, DollarSign,
-  ArrowUpRight, ArrowDownRight, Target, Zap, User,
+  ArrowUpRight, ArrowDownRight, Target, Zap, User, ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -35,6 +36,16 @@ interface PlatformMetric {
   conversion_rate: number;
 }
 
+interface ModerationCampaignRow {
+  id: number;
+  user_id: string;
+  title: string;
+  status: string | null;
+  category: string | null;
+  is_nsfw: boolean;
+  created_at: string | null;
+}
+
 const platformIcons: Record<string, string> = {
   tiktok: '📱',
   instagram: '📸',
@@ -44,19 +55,23 @@ const platformIcons: Record<string, string> = {
 };
 
 export default function AdminDashboard() {
-  const { user, login, loading: authLoading } = useAuth();
+  const { user, login, loading: authLoading, isAdmin } = useAuth();
   const [stats, setStats] = useState<CampaignStats | null>(null);
   const [funnel, setFunnel] = useState<ReferralFunnel | null>(null);
   const [platforms, setPlatforms] = useState<PlatformMetric[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nsfwRows, setNsfwRows] = useState<ModerationCampaignRow[]>([]);
+  const [nsfwTotal, setNsfwTotal] = useState(0);
+  const [nsfwLoading, setNsfwLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
-      loadAnalytics();
+      void loadAnalytics();
+      if (isAdmin) void loadNsfwQueue();
     } else {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, isAdmin]);
 
   const loadAnalytics = async () => {
     try {
@@ -72,6 +87,25 @@ export default function AdminDashboard() {
       console.error('Failed to load analytics:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadNsfwQueue = async () => {
+    setNsfwLoading(true);
+    try {
+      const res = await client.apiCall.invoke({
+        url: '/api/v1/admin/moderation/nsfw-campaigns?skip=0&limit=40',
+        method: 'GET',
+        data: {},
+      });
+      setNsfwRows((res.data?.items || []) as ModerationCampaignRow[]);
+      setNsfwTotal(Number(res.data?.total ?? 0));
+    } catch (err) {
+      console.error('Failed to load NSFW moderation queue:', err);
+      setNsfwRows([]);
+      setNsfwTotal(0);
+    } finally {
+      setNsfwLoading(false);
     }
   };
 
@@ -238,6 +272,57 @@ export default function AdminDashboard() {
             )}
           </div>
         </div>
+
+        {isAdmin && (
+          <div className="mt-10 bg-[#13131A] rounded-2xl border border-white/5 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-rose-400" />
+                NSFW moderation queue
+              </h3>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={nsfwLoading}
+                onClick={() => void loadNsfwQueue()}
+                className="border-white/15 bg-white/5 text-white hover:bg-white/10"
+              >
+                Refresh
+              </Button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">
+              Campaigns flagged as sensitive ({nsfwTotal} total). Open each page to review copy and media before broad
+              distribution.
+            </p>
+            {nsfwLoading && nsfwRows.length === 0 ? (
+              <div className="py-12 text-center text-slate-500 text-sm">Loading…</div>
+            ) : nsfwRows.length === 0 ? (
+              <div className="py-12 text-center text-slate-500 text-sm">No flagged campaigns right now.</div>
+            ) : (
+              <ul className="divide-y divide-white/5 rounded-xl border border-white/5 overflow-hidden">
+                {nsfwRows.map((row) => (
+                  <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-black/20">
+                    <div className="min-w-0">
+                      <p className="font-medium text-white truncate">{row.title || `Campaign #${row.id}`}</p>
+                      <p className="text-[11px] text-slate-500">
+                        #{row.id}
+                        {row.status ? ` · ${row.status}` : ''}
+                        {row.category ? ` · ${row.category}` : ''}
+                      </p>
+                    </div>
+                    <Link
+                      to={`/campaign/${row.id}`}
+                      className="text-sm font-semibold text-violet-400 hover:text-violet-300 shrink-0"
+                    >
+                      Open →
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

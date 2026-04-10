@@ -82,7 +82,8 @@ class FileUpDownResponse(BaseModel):
 
     upload_url: str = Field(default="", description="Presigned URL for uploading the file")
     download_url: str = Field(default="", description="Presigned URL for downloading the file")
-    expires_at: str = Field(..., description="Upload URL expiration time")
+    expires_at: str = Field(default="", description="Upload URL expiration time")
+    access_url: str = Field(default="", description="Public URL after upload, if OSS returns one")
 
 
 class RenameRequest(OSSBaseModel):

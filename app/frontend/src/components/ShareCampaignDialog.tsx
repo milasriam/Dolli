@@ -117,8 +117,9 @@ export function ShareCampaignDialog({
   const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
   const [cardPreviewBusy, setCardPreviewBusy] = useState(false);
 
+  /** Social crawlers resolve OG tags via API share landing; humans redirect to /campaign/:id */
   const canonicalUrl = useMemo(
-    () => `${window.location.origin}/campaign/${campaignId}`,
+    () => `${window.location.origin}/api/share/campaign/${campaignId}`,
     [campaignId],
   );
 
@@ -571,7 +572,7 @@ export function ShareCampaignDialog({
             >
               Sign in
             </button>{' '}
-            for a personal tracking link on taps below. Share cards use the public campaign URL.
+            for a personal tracking link on taps below. Cards and QR use the share link for richer previews.
           </div>
         )}
 

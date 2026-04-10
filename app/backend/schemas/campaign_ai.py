@@ -1,6 +1,6 @@
 """Schemas for AI-assisted campaign draft generation."""
 
-from typing import List
+from typing import List, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -32,3 +32,27 @@ class CampaignAiDraftResponse(BaseModel):
         if v not in CAMPAIGN_CATEGORY_SLUGS:
             raise ValueError("category must be a canonical slug")
         return v
+
+
+class CampaignAiRefineRequest(BaseModel):
+    """Regenerate a single field using the user's story + optional current text."""
+
+    field: Literal["title", "description", "impact_statement"]
+    story_context: str = Field(..., min_length=1, max_length=4000)
+    current_value: str = Field(default="", max_length=2000)
+    model: str = Field(
+        default="deepseek-v3.2",
+        description="Passed through to the AI hub.",
+    )
+
+
+class CampaignAiRefineResponse(BaseModel):
+    value: str
+    normalization_notes: List[str] = Field(default_factory=list)
+
+
+class CampaignAiStatusResponse(BaseModel):
+    """Public-ish flags for the SPA (no secrets)."""
+
+    enabled: bool
+    hub_configured: bool

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { client } from '@/lib/api';
 import { isPaymentsEnabled } from '@/lib/featureFlags';
 import { ShareCampaignDialog } from '@/components/ShareCampaignDialog';
@@ -7,10 +7,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import Header from '@/components/Header';
 import { OwnerCampaignControls } from '@/components/OwnerCampaignControls';
 import { fetchCampaignOrganizerInsights, type CampaignOrganizerInsights } from '@/lib/campaignOrganizerInsights';
+import { trackClientEvent } from '@/lib/productAnalytics';
 import { toast } from 'sonner';
 import {
   Heart, Share2, Users, Clock, ArrowLeft,
   Sparkles, UserCircle, Gift, Megaphone, ShieldCheck,
+  Smartphone, Copy, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -74,6 +76,7 @@ function loadScript(src: string) {
 export default function CampaignDetail() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { user, login } = useAuth();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,8 +84,11 @@ export default function CampaignDetail() {
   const [shareOpen, setShareOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<PaymentProvider>('halyk_epay');
   const [organizerInsights, setOrganizerInsights] = useState<CampaignOrganizerInsights | null>(null);
+  const [lastFeeBps, setLastFeeBps] = useState<number | null>(null);
+  const [showPostPublish, setShowPostPublish] = useState(false);
 
   const referrer = searchParams.get('ref');
+  const fromCreate = searchParams.get('from') === 'create';
 
   useEffect(() => {
     void loadCampaign();
@@ -90,6 +96,28 @@ export default function CampaignDetail() {
       trackClick();
     }
   }, [id, user?.nsfw_filter_enabled]);
+
+  useEffect(() => {
+    if (campaign && fromCreate && user?.id === campaign.user_id) {
+      setShowPostPublish(true);
+      trackClientEvent('campaign_post_publish_view', { campaign_id: campaign.id });
+    } else {
+      setShowPostPublish(false);
+    }
+  }, [campaign, fromCreate, user?.id]);
+
+  useEffect(() => {
+    if (campaign?.title) {
+      document.title = `${campaign.title} · Dolli`;
+    }
+    return () => {
+      document.title = 'Dolli — Social-Native Micro-Donation Engine';
+    };
+  }, [campaign?.title]);
+
+  useEffect(() => {
+    setLastFeeBps(null);
+  }, [selectedProvider]);
 
   useEffect(() => {
     if (!id) return;
@@ -146,6 +174,12 @@ export default function CampaignDetail() {
       return;
     }
 
+    trackClientEvent('donate_click', {
+      campaign_id: Number(id),
+      amount,
+      provider: selectedProvider,
+    });
+
     setDonating(true);
     try {
       const response = await client.apiCall.invoke({
@@ -161,6 +195,8 @@ export default function CampaignDetail() {
       });
 
       const { action, url, payment_payload, invoice_id, provider, message } = response.data;
+      const bps = (response.data as { platform_fee_bps?: number }).platform_fee_bps;
+      if (typeof bps === 'number') setLastFeeBps(bps);
 
       if (message) {
         toast.success(message);
@@ -267,6 +303,58 @@ export default function CampaignDetail() {
           onRequestLogin={login}
           afterTrackedShare={() => void loadCampaign()}
         />
+
+        {showPostPublish && campaign && (
+          <div className="mb-6 rounded-2xl border border-emerald-500/35 bg-gradient-to-br from-emerald-950/40 to-violet-950/30 p-5 relative overflow-hidden">
+            <button
+              type="button"
+              aria-label="Dismiss"
+              onClick={() => {
+                setShowPostPublish(false);
+                navigate(`/campaign/${campaign.id}`, { replace: true });
+              }}
+              className="absolute top-3 right-3 p-1 rounded-lg text-slate-500 hover:text-white hover:bg-white/10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <p className="text-lg font-bold text-white pr-8">You’re live — now spread the word</p>
+            <p className="text-sm text-slate-400 mt-1 mb-4">
+              Share links use rich previews. Add a strong cover photo or short video if you haven’t yet.
+            </p>
+            <ul className="text-xs text-slate-500 space-y-1 mb-4 list-disc list-inside">
+              <li>Open Share studio (below) for every social format</li>
+              <li>Copy your public link from the share dialog</li>
+              <li>On iPhone: Share → Add to Home Screen for an app-like shortcut (PWA)</li>
+            </ul>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => setShareOpen(true)}
+                className="rounded-xl bg-violet-600 hover:bg-violet-500 text-white border-0"
+              >
+                <Share2 className="w-4 h-4 mr-2" />
+                Open share studio
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl border-white/15 bg-white/5 text-white"
+                onClick={async () => {
+                  const u = `${window.location.origin}/api/share/campaign/${campaign.id}`;
+                  await navigator.clipboard.writeText(u);
+                  toast.success('Share link copied — great for bios and DMs');
+                }}
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Copy share link
+              </Button>
+            </div>
+            <p className="text-[11px] text-slate-600 mt-3 flex items-center gap-1">
+              <Smartphone className="w-3.5 h-3.5" />
+              Tip: installed Dolli from the browser feels faster on the next visit.
+            </p>
+          </div>
+        )}
 
         {referrer && (
           <div className="mb-6 p-4 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center gap-3">
@@ -464,6 +552,13 @@ export default function CampaignDetail() {
                   {campaign.donor_count.toLocaleString()} people have donated
                 </p>
               </div>
+
+              {paymentsLive && lastFeeBps != null && (
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Transparency: a platform fee of up to {(lastFeeBps / 100).toFixed(1)}% is recorded on the organizer
+                  side at checkout. The amount you choose to give is unchanged.
+                </p>
+              )}
 
               <div
                 className={`space-y-3 rounded-2xl border border-white/5 bg-black/20 p-4 ${

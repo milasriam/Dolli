@@ -1,12 +1,14 @@
 import json
 import logging
 import os
+import re
+import uuid
 from typing import List, Optional
 
 from datetime import datetime, date
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,8 +19,10 @@ from models.auth import User as AuthUser
 from models.campaigns import Campaigns
 from models.user_profiles import User_profiles
 from schemas.auth import UserResponse
+from schemas.storage import FileUpDownRequest
 from services.campaigns import CampaignsService
 from services.donations import DonationsService
+from services.storage import StorageService
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -207,6 +211,17 @@ class CampaignsListResponse(BaseModel):
     limit: int
 
 
+class PresignCoverRequest(BaseModel):
+    filename: str = Field(..., min_length=1, max_length=220)
+
+
+class PresignCoverResponse(BaseModel):
+    upload_url: str
+    access_url: str = ""
+    object_key: str
+    expires_at: str = ""
+
+
 class CampaignsBatchCreateRequest(BaseModel):
     """Batch create request"""
     items: List[CampaignsData]
@@ -235,6 +250,7 @@ async def query_campaignss(
     sort: str = Query(None, description="Sort field (prefix with '-' for descending)"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(20, ge=1, le=2000, description="Max number of records to return"),
+    search: str = Query(None, max_length=200, description="Search title and description (ilike)"),
     fields: str = Query(None, description="Comma-separated list of fields to return"),
     db: AsyncSession = Depends(get_db),
     viewer: Optional[UserResponse] = Depends(get_optional_current_user),
@@ -258,6 +274,7 @@ async def query_campaignss(
             query_dict=query_dict,
             sort=sort,
             viewer=viewer,
+            search=search,
         )
         logger.debug(f"Found {result['total']} campaignss")
         return result
@@ -268,12 +285,61 @@ async def query_campaignss(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
+@router.post("/presign-cover", response_model=PresignCoverResponse)
+async def presign_campaign_cover(
+    body: PresignCoverRequest,
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Presigned PUT URL for a campaign cover image (JPEG/PNG/WebP).
+    Set DOLLI_COVER_UPLOAD_BUCKET (and optionally DOLLI_COVER_PUBLIC_BASE_URL).
+    """
+    bucket = (os.environ.get("DOLLI_COVER_UPLOAD_BUCKET") or "").strip()
+    if not bucket:
+        raise HTTPException(
+            status_code=503,
+            detail="Cover upload is not configured on this server. Paste an https image URL instead.",
+        )
+    base = (os.environ.get("DOLLI_COVER_PUBLIC_BASE_URL") or "").rstrip("/")
+    raw_name = body.filename.strip()
+    ext = ""
+    if "." in raw_name:
+        ext = raw_name.rsplit(".", 1)[-1].lower()
+        if ext not in ("jpg", "jpeg", "png", "webp", "gif"):
+            ext = "jpg"
+    else:
+        ext = "jpg"
+    safe_stem = re.sub(r"[^a-zA-Z0-9._-]+", "-", raw_name.rsplit(".", 1)[0])[:80] or "cover"
+    object_key = f"campaign-covers/{current_user.id}/{uuid.uuid4().hex}-{safe_stem}.{ext}"
+    try:
+        svc = StorageService()
+        out = await svc.create_upload_url(FileUpDownRequest(bucket_name=bucket, object_key=object_key))
+    except ValueError as e:
+        logger.warning("presign cover storage misconfigured: %s", e)
+        raise HTTPException(status_code=503, detail="File storage is not available.") from e
+    except Exception as e:
+        logger.exception("presign cover failed: %s", e)
+        raise HTTPException(status_code=502, detail="Could not create upload URL.") from e
+
+    access = (out.access_url or "").strip()
+    if not access and base:
+        access = f"{base}/{object_key}"
+
+    return PresignCoverResponse(
+        upload_url=out.upload_url,
+        access_url=access,
+        object_key=object_key,
+        expires_at=out.expires_at or "",
+    )
+
+
 @router.get("/all", response_model=CampaignsListResponse)
 async def query_campaignss_all(
     query: str = Query(None, description="Query conditions (JSON string)"),
     sort: str = Query(None, description="Sort field (prefix with '-' for descending)"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(20, ge=1, le=2000, description="Max number of records to return"),
+    search: str = Query(None, max_length=200, description="Search title and description (ilike)"),
     fields: str = Query(None, description="Comma-separated list of fields to return"),
     db: AsyncSession = Depends(get_db),
     viewer: Optional[UserResponse] = Depends(get_optional_current_user),
@@ -297,6 +363,7 @@ async def query_campaignss_all(
             query_dict=query_dict,
             sort=sort,
             viewer=viewer,
+            search=search,
         )
         logger.debug(f"Found {result['total']} campaignss")
         return result

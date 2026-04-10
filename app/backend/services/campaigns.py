@@ -2,7 +2,7 @@ import logging
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from core.nsfw_visibility import apply_nsfw_list_filter
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.campaigns import Campaigns
@@ -63,6 +63,7 @@ class CampaignsService:
         query_dict: Optional[Dict[str, Any]] = None,
         sort: Optional[str] = None,
         viewer: Optional["UserResponse"] = None,
+        search: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Get paginated list of campaignss"""
         try:
@@ -75,12 +76,34 @@ class CampaignsService:
                         query = query.where(getattr(Campaigns, field) == value)
                         count_query = count_query.where(getattr(Campaigns, field) == value)
 
+            term = (search or "").strip()
+            if term:
+                safe = "".join(c for c in term[:200] if c not in "%_\\")
+                if not safe:
+                    safe = term[:200]
+                pattern = f"%{safe}%"
+                query = query.where(
+                    or_(
+                        Campaigns.title.ilike(pattern),
+                        Campaigns.description.ilike(pattern),
+                    )
+                )
+                count_query = count_query.where(
+                    or_(
+                        Campaigns.title.ilike(pattern),
+                        Campaigns.description.ilike(pattern),
+                    )
+                )
+
             query, count_query = apply_nsfw_list_filter(query, count_query, viewer)
 
             count_result = await self.db.execute(count_query)
             total = count_result.scalar()
 
-            if sort:
+            if sort in ("progress_desc", "-progress"):
+                progress_expr = Campaigns.raised_amount / func.nullif(Campaigns.goal_amount, 0)
+                query = query.order_by(progress_expr.desc().nulls_last(), Campaigns.id.desc())
+            elif sort:
                 if sort.startswith('-'):
                     field_name = sort[1:]
                     if hasattr(Campaigns, field_name):

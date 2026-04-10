@@ -1,15 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useMatch } from 'react-router-dom';
 import { client } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import Header from '@/components/Header';
 import { toast } from 'sonner';
 import { fetchCampaignCreateEligibility } from '@/lib/campaignEligibility';
-import { fetchCampaignAiDraft } from '@/lib/campaignAiDraft';
+import {
+  fetchCampaignAiDraft,
+  fetchCampaignAiStatus,
+  fetchCampaignAiRefine,
+  type AiRefineField,
+  type CampaignAiStatus,
+} from '@/lib/campaignAiDraft';
+import { uploadCoverFile } from '@/lib/campaignCoverUpload';
+import { trackClientEvent } from '@/lib/productAnalytics';
 import { CAMPAIGN_CATEGORIES } from '@/lib/campaignCategories';
 import { getAPIBaseURL } from '@/lib/config';
 import { authApi } from '@/lib/auth';
 import { updateCampaign } from '@/lib/campaignMutations';
+import { cn } from '@/lib/utils';
 import {
   ArrowLeft, Sparkles, ImagePlus, Upload, Clock, DollarSign,
   Eye, User, Heart, Users, Share2, Film,
@@ -61,7 +70,12 @@ export default function CreateCampaign() {
   const [editError, setEditError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiRefining, setAiRefining] = useState<AiRefineField | null>(null);
   const [aiPrompt, setAiPrompt] = useState('');
+  const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
+  const [aiStatus, setAiStatus] = useState<CampaignAiStatus | null>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [eligibility, setEligibility] = useState<Awaited<
     ReturnType<typeof fetchCampaignCreateEligibility>
@@ -89,6 +103,20 @@ export default function CreateCampaign() {
       setShowPreview(true);
     }
   }, [form.title, form.description, form.category]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchCampaignAiStatus().then((s) => {
+      if (!cancelled) setAiStatus(s);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isEditMode) setCreateStep(3);
+  }, [isEditMode]);
 
   useEffect(() => {
     if (isEditMode) return;
@@ -177,6 +205,8 @@ export default function CreateCampaign() {
     };
   }, [isEditMode, editCampaignId, authUser?.id]);
 
+  const storyContextForAi = () => aiPrompt.trim() || `${form.title}\n${form.description}`.trim();
+
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) {
       toast.error('Please describe your cause first');
@@ -185,13 +215,13 @@ export default function CreateCampaign() {
     setAiGenerating(true);
 
     if (USE_MOCK_DATA) {
-      // Simulate AI generation delay
       await new Promise((resolve) => setTimeout(resolve, 1500));
       setForm((prev) => ({
         ...prev,
         ...MOCK_AI_RESULT,
       }));
       toast.success('AI generated your campaign details!');
+      setCreateStep(2);
       setAiGenerating(false);
       return;
     }
@@ -209,17 +239,81 @@ export default function CreateCampaign() {
         gif_url: typeof draft.gif_url === 'string' ? draft.gif_url : prev.gif_url,
         video_url: typeof draft.video_url === 'string' ? draft.video_url : prev.video_url,
       }));
-      toast.success('AI generated your campaign details!');
+      toast.success('Draft ready — review and tweak below.');
+      setCreateStep(2);
+      trackClientEvent('campaign_ai_full_draft', { ok: true });
       if (draft.normalization_notes?.length) {
         toast.info('Adjusted a few fields', {
           description: draft.normalization_notes.slice(0, 3).join(' · '),
         });
       }
     } catch (err: unknown) {
-      const detail = err instanceof Error ? err.message : 'AI generation failed';
-      toast.error(detail);
+      const e = err as Error & { status?: number };
+      const detail = e instanceof Error ? e.message : 'AI generation failed';
+      if (e.status === 403) {
+        toast.error('AI assistant is turned off on this server.');
+      } else if (e.status === 429) {
+        toast.error(detail);
+      } else if (e.status === 503) {
+        toast.error('AI is not configured. Fill the form manually or try later.');
+      } else {
+        toast.error(detail);
+      }
+      trackClientEvent('campaign_ai_full_draft', { ok: false, status: e.status });
     } finally {
       setAiGenerating(false);
+    }
+  };
+
+  const handleAiRefine = async (field: AiRefineField) => {
+    const ctx = storyContextForAi();
+    if (!ctx) {
+      toast.error('Add a short story in step 1, or fill title/description first.');
+      return;
+    }
+    setAiRefining(field);
+    try {
+      const cur =
+        field === 'title'
+          ? form.title
+          : field === 'description'
+            ? form.description
+            : form.impact_statement;
+      const out = await fetchCampaignAiRefine(field, ctx, cur, 'deepseek-v3.2');
+      if (field === 'title') setForm((p) => ({ ...p, title: out.value.slice(0, 60) }));
+      if (field === 'description') setForm((p) => ({ ...p, description: out.value.slice(0, 200) }));
+      if (field === 'impact_statement') setForm((p) => ({ ...p, impact_statement: out.value.slice(0, 80) }));
+      toast.success(field === 'title' ? 'New title idea' : field === 'description' ? 'New description' : 'New impact line');
+      trackClientEvent('campaign_ai_refine', { field });
+    } catch (err: unknown) {
+      const e = err as Error & { status?: number };
+      toast.error(e instanceof Error ? e.message : 'Refine failed');
+      if (e.status === 429) {
+        /* already in message */
+      }
+    } finally {
+      setAiRefining(null);
+    }
+  };
+
+  const handleCoverSelected = async (files: FileList | null) => {
+    const f = files?.[0];
+    if (!f || !f.type.startsWith('image/')) {
+      toast.error('Choose an image file (JPEG, PNG, or WebP).');
+      return;
+    }
+    setCoverUploading(true);
+    try {
+      const url = await uploadCoverFile(f);
+      setForm((p) => ({ ...p, image_url: url }));
+      toast.success('Cover uploaded');
+      trackClientEvent('campaign_cover_upload', { ok: true });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Upload failed');
+      trackClientEvent('campaign_cover_upload', { ok: false });
+    } finally {
+      setCoverUploading(false);
+      if (coverInputRef.current) coverInputRef.current.value = '';
     }
   };
 
@@ -384,7 +478,12 @@ export default function CreateCampaign() {
         toast.success(
           isDraft ? 'Draft updated.' : 'Campaign published — you’re live in Explore!',
         );
-        navigate(isDraft ? '/profile' : `/campaign/${editCampaignId}`);
+        if (!isDraft) {
+          trackClientEvent('campaign_published', { campaign_id: editCampaignId, mode: 'edit' });
+          navigate(`/campaign/${editCampaignId}?from=create`);
+        } else {
+          navigate('/profile');
+        }
         return;
       }
 
@@ -409,7 +508,13 @@ export default function CreateCampaign() {
         },
       });
       toast.success(isDraft ? 'Campaign saved as draft!' : 'Campaign launched successfully! 🚀');
-      navigate(isDraft ? '/profile' : `/campaign/${response?.data?.id}`);
+      const newId = response?.data?.id as number | undefined;
+      if (!isDraft && newId != null) {
+        trackClientEvent('campaign_published', { campaign_id: newId, mode: 'create' });
+        navigate(`/campaign/${newId}?from=create`);
+      } else {
+        navigate('/profile');
+      }
     } catch (err: any) {
       const detail =
         err instanceof Error
@@ -423,6 +528,10 @@ export default function CreateCampaign() {
 
   const selectedCategory = categories.find((c) => c.value === form.category);
   const progress = 0;
+  const showCore = isEditMode || createStep >= 2;
+  const showMedia = isEditMode || createStep >= 3;
+  const aiDisabled =
+    aiStatus != null && (!aiStatus.enabled || !aiStatus.hub_configured);
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
@@ -447,16 +556,57 @@ export default function CreateCampaign() {
           </div>
         </div>
 
-        {/* AI Prompt Section */}
-        <div className="bg-[#13131A] rounded-2xl border border-violet-500/20 p-5 mb-6 relative overflow-hidden">
+        {!isEditMode && (
+          <div className="flex flex-wrap gap-2 mb-6">
+            {([
+              { n: 1 as const, label: 'Story & AI' },
+              { n: 2 as const, label: 'Details' },
+              { n: 3 as const, label: 'Media & launch' },
+            ]).map(({ n, label }) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => {
+                  if (n <= createStep) setCreateStep(n);
+                }}
+                className={cn(
+                  'rounded-full px-3 py-1.5 text-xs font-semibold border transition-colors',
+                  createStep === n
+                    ? 'border-violet-500/60 bg-violet-500/20 text-white'
+                    : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20',
+                )}
+              >
+                {n}. {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {aiStatus && aiDisabled && (
+          <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-100 leading-relaxed">
+            {!aiStatus.enabled
+              ? 'AI assistant is turned off on this server. Write manually — everything still works.'
+              : 'AI backend is not configured (missing API keys). Use manual fields below.'}
+          </div>
+        )}
+
+        <div
+          className={cn(
+            'bg-[#13131A] rounded-2xl border border-violet-500/20 p-5 mb-6 relative overflow-hidden',
+            (isEditMode || createStep > 1) && 'hidden',
+          )}
+        >
           <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl" />
           <div className="relative">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center">
                 <Sparkles className="w-3.5 h-3.5 text-white" />
               </div>
-              <span className="text-sm font-semibold text-violet-300">AI Campaign Builder</span>
+              <span className="text-sm font-semibold text-violet-300">Step 1 — Describe your cause</span>
             </div>
+            <p className="text-xs text-slate-500 mb-2">
+              We’ll draft title, goal, and story. You’ll edit next — or skip and write by hand.
+            </p>
             <Textarea
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
@@ -464,37 +614,59 @@ export default function CreateCampaign() {
               rows={3}
               className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl resize-none mb-3"
             />
-            <Button
-              onClick={handleAiGenerate}
-              disabled={aiGenerating || !aiPrompt.trim()}
-              className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-5 rounded-xl shadow-lg shadow-violet-500/20 hover:shadow-violet-500/30 transition-all border-0"
-            >
-              {aiGenerating ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Generating...
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4" />
-                  Generate with AI
-                </div>
-              )}
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button
+                onClick={() => void handleAiGenerate()}
+                disabled={aiGenerating || !aiPrompt.trim() || aiDisabled}
+                className="flex-1 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-5 rounded-xl shadow-lg shadow-violet-500/20 border-0"
+              >
+                {aiGenerating ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Generating…
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    Generate full draft
+                  </div>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateStep(2)}
+                className="sm:w-44 border-white/15 bg-white/5 text-white hover:bg-white/10"
+              >
+                Skip — manual
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* Editable Fields */}
-        <div className="bg-[#13131A] rounded-2xl border border-white/5 p-5 space-y-5 mb-6">
+        {/* Core fields */}
+        <div className={cn('bg-[#13131A] rounded-2xl border border-white/5 p-5 space-y-5 mb-6', !showCore && 'hidden')}>
           {/* Title */}
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
               <label className="text-sm font-semibold text-white">Campaign Title</label>
-              {form.title && (
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center gap-1">
-                  <Sparkles className="w-2.5 h-2.5" /> AI suggested
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!!aiRefining || aiDisabled}
+                  onClick={() => void handleAiRefine('title')}
+                  className="h-8 rounded-lg border-violet-500/30 text-violet-200 text-xs"
+                >
+                  {aiRefining === 'title' ? '…' : 'Another title'}
+                </Button>
+                {form.title && (
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center gap-1">
+                    <Sparkles className="w-2.5 h-2.5" /> AI
+                  </span>
+                )}
+              </div>
             </div>
             <Input
               value={form.title}
@@ -530,13 +702,25 @@ export default function CreateCampaign() {
 
           {/* Description */}
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
               <label className="text-sm font-semibold text-white">Short Description</label>
-              {form.description && (
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center gap-1">
-                  <Sparkles className="w-2.5 h-2.5" /> AI suggested
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!!aiRefining || aiDisabled}
+                  onClick={() => void handleAiRefine('description')}
+                  className="h-8 rounded-lg border-violet-500/30 text-violet-200 text-xs"
+                >
+                  {aiRefining === 'description' ? '…' : 'Another description'}
+                </Button>
+                {form.description && (
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center gap-1">
+                    <Sparkles className="w-2.5 h-2.5" /> AI
+                  </span>
+                )}
+              </div>
             </div>
             <Textarea
               value={form.description}
@@ -586,7 +770,20 @@ export default function CreateCampaign() {
             </div>
           </div>
 
-          {/* Visual story — URLs until upload ships */}
+          {!isEditMode && createStep === 2 && (
+            <Button
+              type="button"
+              onClick={() => setCreateStep(3)}
+              className="w-full mb-2 bg-white/10 border border-white/15 text-white hover:bg-white/15"
+            >
+              Continue to media & launch →
+            </Button>
+          )}
+        </div>
+
+        {/* Media, impact, NSFW, preview, CTAs */}
+        <div className={cn('space-y-6', !showMedia && 'hidden')}>
+          {/* Visual story */}
           <div className="rounded-xl border border-pink-500/15 bg-pink-500/5 p-4 space-y-4">
             <div className="flex items-center gap-2 text-pink-200">
               <Film className="w-4 h-4" />
@@ -608,11 +805,21 @@ export default function CreateCampaign() {
                   placeholder="https://…jpg or png — fallback poster if you add video"
                   className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-violet-500/50 rounded-xl h-12 flex-1"
                 />
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => void handleCoverSelected(e.target.files)}
+                />
                 <button
                   type="button"
-                  className="h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:border-white/20 transition-all flex items-center gap-2 text-sm"
+                  disabled={coverUploading}
+                  onClick={() => coverInputRef.current?.click()}
+                  className="h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:border-white/20 transition-all flex items-center gap-2 text-sm disabled:opacity-50"
                 >
                   <Upload className="w-4 h-4" />
+                  {coverUploading ? '…' : ''}
                 </button>
               </div>
             </div>
@@ -635,18 +842,27 @@ export default function CreateCampaign() {
               />
             </div>
           </div>
-        </div>
 
         {/* Impact Section */}
         <div className="bg-[#13131A] rounded-2xl border border-emerald-500/20 p-5 mb-6">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
             <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
               <Heart className="w-3.5 h-3.5 text-white fill-white" />
             </div>
             <span className="text-sm font-semibold text-emerald-300">Impact Statement</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!!aiRefining || aiDisabled}
+              onClick={() => void handleAiRefine('impact_statement')}
+              className="h-8 rounded-lg border-emerald-500/30 text-emerald-200 text-xs ml-auto"
+            >
+              {aiRefining === 'impact_statement' ? '…' : 'Another line'}
+            </Button>
             {form.impact_statement && (
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center gap-1 ml-auto">
-                <Sparkles className="w-2.5 h-2.5" /> AI suggested
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center gap-1">
+                <Sparkles className="w-2.5 h-2.5" /> AI
               </span>
             )}
           </div>
@@ -789,6 +1005,7 @@ export default function CreateCampaign() {
           >
             {isEditMode ? 'Save draft' : 'Save Draft'}
           </Button>
+        </div>
         </div>
       </div>
     </div>

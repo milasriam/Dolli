@@ -140,8 +140,12 @@ class StorageService:
             result = await self._apost_oss_service(endpoint, payload)
             # Format response according to ObjectStorage service response
             return FileUpDownResponse(
-                upload_url=result.get("upload_url"),
-                expires_at=result.get("expires_at"),
+                upload_url=result.get("upload_url") or "",
+                expires_at=result.get("expires_at") or "",
+                access_url=result.get("access_url")
+                or result.get("public_url")
+                or result.get("file_url")
+                or "",
             )
         except Exception as e:
             logger.error(f"Failed to create upload URL: {e}")

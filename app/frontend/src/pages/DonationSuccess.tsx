@@ -5,9 +5,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import Header from '@/components/Header';
 import { ShareCampaignDialog } from '@/components/ShareCampaignDialog';
 import { toast } from 'sonner';
-import { Heart, Share2, Trophy, ArrowRight } from 'lucide-react';
+import { Heart, Share2, Trophy, ArrowRight, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import confetti from 'canvas-confetti';
+
+const MAX_VERIFY_ROUNDS = 20;
 
 interface Campaign {
   id: number;
@@ -29,22 +31,77 @@ export default function DonationSuccess() {
   const initialStatus = searchParams.get('status');
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState<PaymentState>('verifying');
+  const [paymentStatus, setPaymentStatus] = useState<PaymentState>(() => {
+    if (initialStatus === 'failed') return 'failed';
+    if (invoiceId) return 'verifying';
+    return 'error';
+  });
+  const [verifyStalled, setVerifyStalled] = useState(false);
+  const [verifyAttempt, setVerifyAttempt] = useState(0);
+  const [verifyPass, setVerifyPass] = useState(0);
 
   useEffect(() => {
     if (campaignId) {
-      loadCampaign();
+      void loadCampaign();
     }
     if (initialStatus === 'failed') {
       setPaymentStatus('failed');
+    }
+  }, [campaignId, initialStatus]);
+
+  useEffect(() => {
+    if (initialStatus === 'failed') {
       return;
     }
-    if (invoiceId) {
-      verifyPayment();
+    if (!invoiceId) {
+      setPaymentStatus('error');
       return;
     }
-    setPaymentStatus('error');
-  }, []);
+
+    let cancelled = false;
+
+    void (async () => {
+      setVerifyStalled(false);
+      setPaymentStatus('verifying');
+      for (let i = 0; i < MAX_VERIFY_ROUNDS && !cancelled; i++) {
+        if (!cancelled) setVerifyAttempt(i + 1);
+        try {
+          const response = await client.apiCall.invoke({
+            url: '/api/v1/payment/verify_payment',
+            method: 'POST',
+            data: { invoice_id: invoiceId, provider },
+          });
+          const st = (response.data.status as string) || 'pending';
+          const rawWait = Number((response.data as { retry_after_seconds?: number }).retry_after_seconds);
+          const waitMs = Math.min(30000, Math.max(2000, Number.isFinite(rawWait) ? rawWait * 1000 : 5000));
+
+          if (st === 'paid' || st === 'failed') {
+            if (!cancelled) setPaymentStatus(st as PaymentState);
+            return;
+          }
+
+          if (!cancelled) setPaymentStatus('pending');
+
+          if (i === MAX_VERIFY_ROUNDS - 1) {
+            if (!cancelled) setVerifyStalled(true);
+            return;
+          }
+
+          await new Promise((r) => setTimeout(r, waitMs));
+        } catch (err: unknown) {
+          const e = err as { data?: { detail?: string }; response?: { data?: { detail?: string } } };
+          const detail = e?.data?.detail || e?.response?.data?.detail;
+          if (detail) toast.error(String(detail));
+          if (!cancelled) setPaymentStatus('error');
+          return;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [invoiceId, provider, initialStatus, verifyPass]);
 
   useEffect(() => {
     if (paymentStatus === 'paid') {
@@ -71,24 +128,6 @@ export default function DonationSuccess() {
     }
   }, [paymentStatus]);
 
-  const verifyPayment = async () => {
-    try {
-      const response = await client.apiCall.invoke({
-        url: '/api/v1/payment/verify_payment',
-        method: 'POST',
-        data: { invoice_id: invoiceId, provider },
-      });
-      setPaymentStatus((response.data.status as PaymentState) || 'pending');
-    } catch (err: any) {
-      const detail = err?.data?.detail || err?.response?.data?.detail;
-      if (detail) {
-        toast.error(detail);
-      }
-      setPaymentStatus('error');
-      console.error('Payment verification failed:', err);
-    }
-  };
-
   const loadCampaign = async () => {
     try {
       const response = await client.entities.campaigns.get({ id: campaignId! });
@@ -109,7 +148,11 @@ export default function DonationSuccess() {
         {paymentStatus === 'verifying' && (
           <div className="text-center py-20">
             <div className="w-16 h-16 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-slate-400">Verifying your donation...</p>
+            <p className="text-slate-300 font-medium">Verifying your donation…</p>
+            <p className="text-xs text-slate-500 mt-2">
+              Contacting the payment provider
+              {verifyAttempt > 0 ? ` (round ${verifyAttempt} of ${MAX_VERIFY_ROUNDS})` : ''}.
+            </p>
           </div>
         )}
 
@@ -159,9 +202,26 @@ export default function DonationSuccess() {
               </p>
             </div>
 
+            {verifyStalled && (
+              <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                <p className="font-semibold text-white mb-1">Still processing</p>
+                <p className="text-xs text-amber-200/90 leading-relaxed">
+                  We stopped auto-checking after several tries. If you completed payment, use “Check again” — it can take a
+                  minute for the bank to confirm.
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-3">
-              <Button onClick={verifyPayment} className="flex-1 bg-violet-600 hover:bg-violet-500 text-white border-0">
-                Check Again
+              <Button
+                onClick={() => {
+                  setVerifyStalled(false);
+                  setVerifyPass((p) => p + 1);
+                }}
+                className="flex-1 bg-violet-600 hover:bg-violet-500 text-white border-0"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Check again
               </Button>
               <Link to={`/campaign/${campaignId}`} className="flex-1">
                 <Button variant="outline" className="w-full !bg-transparent border-white/10 text-white">

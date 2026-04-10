@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { client, refreshWebSdkClient } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { CAMPAIGN_CATEGORIES } from '@/lib/campaignCategories';
 import Header from '@/components/Header';
-import { Search, Filter, Users, Share2, Sparkles, Heart } from 'lucide-react';
+import { Search, Users, Share2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface Campaign {
@@ -16,7 +16,7 @@ interface Campaign {
   raised_amount: number;
   donor_count: number;
   share_count: number;
-  image_url: string;
+  image_url: string | null;
   status: string;
   urgency_level: string;
   featured: boolean;
@@ -35,57 +35,85 @@ const urgencyBadge: Record<string, { label: string; color: string }> = {
   low: { label: '🌱 Growing', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
 };
 
+const PAGE_SIZE = 24;
+
 export default function Explore() {
   const { user } = useAuth();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('trending');
+  const [skip, setSkip] = useState(0);
+  const filterKey = `${debouncedSearch}\0${selectedCategory}\0${sortBy}`;
+  const prevFilterKeyRef = useRef(filterKey);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), 400);
+    return () => window.clearTimeout(t);
+  }, [searchQuery]);
 
   useEffect(() => {
     refreshWebSdkClient();
+    const filtersChanged = prevFilterKeyRef.current !== filterKey;
+    if (filtersChanged) {
+      prevFilterKeyRef.current = filterKey;
+      if (skip !== 0) {
+        setSkip(0);
+        return;
+      }
+    }
+
     let cancelled = false;
-    setLoading(true);
+    const isFirstPage = skip === 0;
+    if (isFirstPage) setLoading(true);
+    else setLoadingMore(true);
     (async () => {
       try {
-        const response = await client.entities.campaigns.query({
-          query: { status: 'active' },
-          sort: '-created_at',
-          limit: 50,
+        const sortApi =
+          sortBy === 'trending'
+            ? '-share_count'
+            : sortBy === 'newest'
+              ? '-created_at'
+              : 'progress_desc';
+        const q: Record<string, string> = { status: 'active' };
+        if (selectedCategory !== 'all') q.category = selectedCategory;
+        const params = new URLSearchParams();
+        params.set('query', JSON.stringify(q));
+        params.set('sort', sortApi);
+        params.set('limit', String(PAGE_SIZE));
+        params.set('skip', String(skip));
+        if (debouncedSearch) params.set('search', debouncedSearch);
+
+        const response = await client.apiCall.invoke({
+          url: `/api/v1/entities/campaigns?${params.toString()}`,
+          method: 'GET',
+          data: {},
         });
-        if (!cancelled) setCampaigns(response?.data?.items || []);
+        if (cancelled) return;
+        const items = (response?.data?.items || []) as Campaign[];
+        const t = Number(response?.data?.total ?? 0);
+        setTotal(Number.isFinite(t) ? t : 0);
+        setCampaigns((prev) => (isFirstPage ? items : [...prev, ...items]));
       } catch (err) {
         console.error('Failed to load campaigns:', err);
+        if (!cancelled && isFirstPage) setCampaigns([]);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [user?.id, user?.nsfw_filter_enabled]);
+  }, [user?.id, user?.nsfw_filter_enabled, filterKey, skip]);
 
-  const filtered = campaigns
-    .filter((c) => {
-      if (selectedCategory !== 'all' && c.category !== selectedCategory) return false;
-      if (searchQuery && !c.title.toLowerCase().includes(searchQuery.toLowerCase()) && !c.description.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'trending') {
-        const scoreA = a.share_count * 2 + a.donor_count * 1.5 + (a.featured ? 2000 : 0);
-        const scoreB = b.share_count * 2 + b.donor_count * 1.5 + (b.featured ? 2000 : 0);
-        return scoreB - scoreA;
-      }
-      if (sortBy === 'newest') return 0; // already sorted by created_at
-      if (sortBy === 'almost-funded') {
-        const pA = a.raised_amount / a.goal_amount;
-        const pB = b.raised_amount / b.goal_amount;
-        return pB - pA;
-      }
-      return 0;
-    });
+  const hasMore = skip + campaigns.length < total;
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
@@ -154,15 +182,16 @@ export default function Explore() {
               <div key={i} className="bg-[#13131A] rounded-2xl border border-white/5 h-80 animate-pulse" />
             ))}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : campaigns.length === 0 ? (
           <div className="text-center py-20">
             <div className="text-5xl mb-4">🔍</div>
             <h3 className="text-xl font-bold mb-2">No campaigns found</h3>
             <p className="text-slate-400">Try adjusting your search or filters</p>
           </div>
         ) : (
+          <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filtered.map((campaign) => {
+            {campaigns.map((campaign) => {
               const progress = Math.min((campaign.raised_amount / campaign.goal_amount) * 100, 100);
               const urgency = urgencyBadge[campaign.urgency_level] || urgencyBadge.medium;
 
@@ -172,12 +201,18 @@ export default function Explore() {
                   to={`/campaign/${campaign.id}`}
                   className="group block bg-[#13131A] rounded-2xl border border-white/5 overflow-hidden hover:border-violet-500/30 hover:shadow-2xl hover:shadow-violet-500/10 transition-all duration-300 hover:-translate-y-1"
                 >
-                  <div className="relative h-48 overflow-hidden">
+                  <div className="relative h-48 overflow-hidden bg-[#1A1A25]">
+                    {campaign.image_url ? (
                     <img
                       src={campaign.image_url}
                       alt={campaign.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-600 text-sm">
+                        No cover image
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-[#13131A] via-transparent to-transparent" />
                     <div className="absolute top-3 left-3 flex flex-wrap gap-2">
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${urgency.color}`}>
@@ -228,6 +263,20 @@ export default function Explore() {
               );
             })}
           </div>
+          {hasMore && (
+            <div className="flex justify-center mt-10">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loadingMore}
+                onClick={() => setSkip((s) => s + PAGE_SIZE)}
+                className="rounded-xl border-white/15 bg-white/5 text-white hover:bg-white/10 px-8 py-6"
+              >
+                {loadingMore ? 'Loading…' : 'Load more'}
+              </Button>
+            </div>
+          )}
+          </>
         )}
       </div>
     </div>

@@ -15,6 +15,7 @@ from models.auth import User as AuthUser
 from models.campaigns import Campaigns
 from models.donations import Donations
 from schemas.auth import UserResponse
+from services.notify_email import send_donation_receipt_email
 from services.payment_providers import (
     PaymentProviderError,
     create_halyk_checkout,
@@ -101,7 +102,8 @@ async def _mark_paid_if_needed(
     db: AsyncSession,
     donation: Donations,
     provider_reference: Optional[str] = None,
-) -> Donations:
+) -> tuple[Donations, bool]:
+    """Returns (donation, newly_marked_paid)."""
     already_paid = donation.payment_status == "paid"
     donation.payment_status = "paid"
     if provider_reference:
@@ -110,14 +112,26 @@ async def _mark_paid_if_needed(
     if donation.created_at is None:
         donation.created_at = datetime.now(timezone.utc)
 
-    if not already_paid:
+    newly = not already_paid
+    if newly:
         campaign = await _get_campaign_or_404(db, donation.campaign_id)
         campaign.raised_amount = float(campaign.raised_amount or 0) + float(donation.amount or 0)
         campaign.donor_count = int(campaign.donor_count or 0) + 1
 
     await db.commit()
     await db.refresh(donation)
-    return donation
+    return donation, newly
+
+
+async def _email_donor_receipt(db: AsyncSession, donation: Donations, campaign_title: str) -> None:
+    result = await db.execute(select(AuthUser).where(AuthUser.id == donation.user_id).limit(1))
+    user_row = result.scalar_one_or_none()
+    if user_row and getattr(user_row, "email", None):
+        await send_donation_receipt_email(
+            str(user_row.email),
+            campaign_title,
+            float(donation.amount or 0),
+        )
 
 
 async def _mark_failed(
@@ -202,6 +216,11 @@ async def create_payment_session(
         "url": intent.url,
         "message": intent.message,
         "payment_payload": intent.payment_payload,
+        "platform_fee_bps": fee_bps,
+        "platform_fee_disclosure": (
+            "A platform fee (basis points on the organizer side) is recorded at checkout. "
+            "You always see the amount you choose to give."
+        ),
     }
 
 
@@ -222,15 +241,19 @@ async def verify_payment(
     provider = _normalize_provider(payload.provider or donation.payment_provider)
 
     if provider == "kaspi_pay":
-        return {
+        st = donation.payment_status or "pending"
+        out = {
             "provider": provider,
             "invoice_id": invoice_id,
-            "status": donation.payment_status or "pending",
-            "payment_status": donation.payment_status or "pending",
+            "status": st,
+            "payment_status": st,
             "campaign_id": donation.campaign_id,
             "amount": donation.amount,
             "message": "Kaspi Pay payments are currently confirmed manually.",
         }
+        if st == "pending":
+            out["retry_after_seconds"] = 8
+        return out
 
     try:
         verification = await verify_halyk_payment(invoice_id)
@@ -241,7 +264,10 @@ async def verify_payment(
         raise HTTPException(status_code=500, detail="Failed to verify payment")
 
     if verification.status == "paid":
-        donation = await _mark_paid_if_needed(db, donation, verification.provider_reference)
+        donation, newly = await _mark_paid_if_needed(db, donation, verification.provider_reference)
+        if newly:
+            camp = await _get_campaign_or_404(db, donation.campaign_id)
+            await _email_donor_receipt(db, donation, camp.title or "your fundraiser")
     elif verification.status == "failed":
         donation = await _mark_failed(db, donation, verification.provider_reference)
     else:
@@ -250,16 +276,20 @@ async def verify_payment(
             await db.commit()
             await db.refresh(donation)
 
-    return {
+    st = donation.payment_status or verification.status
+    out = {
         "provider": verification.provider,
         "invoice_id": verification.invoice_id,
-        "status": donation.payment_status or verification.status,
+        "status": st,
         "payment_status": donation.payment_status or verification.payment_status,
         "campaign_id": donation.campaign_id,
         "amount": donation.amount,
         "provider_reference": donation.provider_reference,
         "raw": verification.raw,
     }
+    if st == "pending":
+        out["retry_after_seconds"] = 5
+    return out
 
 
 @router.post("/providers/halyk/callback")
@@ -278,7 +308,10 @@ async def halyk_callback(payload: HalykCallbackRequest, db: AsyncSession = Depen
     provider_reference = payload.reference or payload.id
 
     if result_code == "100" and reason_code in {"", "00"}:
-        donation = await _mark_paid_if_needed(db, donation, provider_reference)
+        donation, newly = await _mark_paid_if_needed(db, donation, provider_reference)
+        if newly:
+            camp = await _get_campaign_or_404(db, donation.campaign_id)
+            await _email_donor_receipt(db, donation, camp.title or "your fundraiser")
         status_value = donation.payment_status
     elif result_code in {"107", "200", "201"} or status_name in {"NEW", "AUTH", "IN_PROGRESS", "PENDING"}:
         if provider_reference:

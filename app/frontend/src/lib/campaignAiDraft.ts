@@ -1,6 +1,20 @@
 import { getAPIBaseURL } from '@/lib/config';
 import { authApi } from '@/lib/auth';
 
+export type CampaignAiStatus = {
+  enabled: boolean;
+  hub_configured: boolean;
+};
+
+export async function fetchCampaignAiStatus(): Promise<CampaignAiStatus> {
+  const res = await fetch(`${getAPIBaseURL()}/api/v1/campaigns/ai-status`, { credentials: 'omit' });
+  const data = (await res.json().catch(() => ({}))) as Partial<CampaignAiStatus>;
+  return {
+    enabled: Boolean(data.enabled),
+    hub_configured: Boolean(data.hub_configured),
+  };
+}
+
 export type CampaignAiDraft = {
   title: string;
   description: string;
@@ -39,4 +53,40 @@ export async function fetchCampaignAiDraft(
     throw err;
   }
   return data as CampaignAiDraft;
+}
+
+export type AiRefineField = 'title' | 'description' | 'impact_statement';
+
+export async function fetchCampaignAiRefine(
+  field: AiRefineField,
+  storyContext: string,
+  currentValue: string,
+  model = 'deepseek-v3.2',
+): Promise<{ value: string; normalization_notes?: string[] }> {
+  const token = authApi.getStoredToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch(`${getAPIBaseURL()}/api/v1/campaigns/ai-refine`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      field,
+      story_context: storyContext,
+      current_value: currentValue,
+      model,
+    }),
+    credentials: 'omit',
+  });
+
+  const data = (await res.json().catch(() => ({}))) as { detail?: string; value?: string; normalization_notes?: string[] };
+  if (!res.ok) {
+    const detail = typeof data.detail === 'string' ? data.detail : 'AI refine failed';
+    const err = new Error(detail) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
+  return { value: data.value || '', normalization_notes: data.normalization_notes };
 }
