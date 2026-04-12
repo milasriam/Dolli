@@ -148,21 +148,21 @@ export function OwnerCampaignControls({ campaign, onChanged, layout = 'row' }: P
       <>
         <div className="mb-6 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4 sm:p-5">
           <p className="text-sm font-semibold text-amber-200">You’re the organizer</p>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             No completed donations yet — you can unpublish to drafts, publish again, or delete this fundraiser.
           </p>
           {actions}
         </div>
         <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-          <AlertDialogContent className="bg-[#13131A] border-white/10 text-white">
+          <AlertDialogContent className="bg-card border-border text-white">
             <AlertDialogHeader>
               <AlertDialogTitle>Delete this campaign?</AlertDialogTitle>
-              <AlertDialogDescription className="text-slate-400">
+              <AlertDialogDescription className="text-muted-foreground">
                 This removes “{campaign.title}” permanently. You can’t undo this.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="border-white/10 bg-transparent text-slate-300">
+              <AlertDialogCancel className="border-border bg-transparent text-muted-foreground">
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction
@@ -193,15 +193,15 @@ export function OwnerCampaignControls({ campaign, onChanged, layout = 'row' }: P
         {actions}
       </div>
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent className="bg-[#13131A] border-white/10 text-white">
+        <AlertDialogContent className="bg-card border-border text-white">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this campaign?</AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-400">
+            <AlertDialogDescription className="text-muted-foreground">
               This removes “{campaign.title}” permanently.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-white/10 bg-transparent text-slate-300">
+            <AlertDialogCancel className="border-border bg-transparent text-muted-foreground">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction

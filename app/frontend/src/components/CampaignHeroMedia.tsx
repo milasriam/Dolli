@@ -57,7 +57,7 @@ export function CampaignHeroMedia({
   }
 
   return (
-    <div className={`${className} flex items-center justify-center bg-[#13131A] text-slate-500 text-sm`}>
+    <div className={`${className} flex items-center justify-center bg-card text-muted-foreground text-sm`}>
       No preview image
     </div>
   );
