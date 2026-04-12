@@ -13,8 +13,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Bell, CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 export default function Notifications() {
+  const { t } = useTranslation();
   const { user, login } = useAuth();
   const [items, setItems] = useState<UserNotification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +44,7 @@ export default function Notifications() {
       await markNotificationsRead([n.id]);
       setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)));
     } catch {
-      toast.error('Could not update notification');
+      toast.error(t('notifications.toastUpdateError'));
     }
   };
 
@@ -51,9 +53,9 @@ export default function Notifications() {
     try {
       await markAllNotificationsRead();
       await load();
-      toast.success('All marked read');
+      toast.success(t('notifications.toastAllRead'));
     } catch {
-      toast.error('Could not mark all read');
+      toast.error(t('notifications.toastAllReadError'));
     }
   };
 
@@ -67,10 +69,10 @@ export default function Notifications() {
           className="mx-auto w-full max-w-lg flex-1 px-4 pb-16 pt-28 text-center outline-none"
         >
           <Bell className="w-12 h-12 mx-auto text-violet-400 mb-4" />
-          <h1 className="text-2xl font-bold mb-2">Sign in for notifications</h1>
-          <p className="text-muted-foreground mb-6 text-sm">Follow organizers and get alerts when they launch fundraisers.</p>
+          <h1 className="text-2xl font-bold mb-2">{t('notifications.guestTitle')}</h1>
+          <p className="text-muted-foreground mb-6 text-sm">{t('notifications.guestBody')}</p>
           <Button onClick={() => login()} className="rounded-xl bg-violet-600 hover:bg-violet-500">
-            Log in
+            {t('notifications.login')}
           </Button>
         </main>
         <SiteFooter />
@@ -87,8 +89,8 @@ export default function Notifications() {
         className="mx-auto w-full max-w-2xl flex-1 px-4 pb-20 pt-24 outline-none sm:px-6"
       >
         <PageHeader
-          title="Notifications"
-          description="New campaigns from people you follow"
+          title={t('notifications.title')}
+          description={t('notifications.description')}
           actions={
             unreadIds.length > 0 ? (
               <Button
@@ -99,7 +101,7 @@ export default function Notifications() {
                 className="shrink-0 border-border text-foreground"
               >
                 <CheckCheck className="mr-1.5 h-4 w-4" />
-                Mark all read
+                {t('notifications.markAllRead')}
               </Button>
             ) : null
           }
@@ -114,11 +116,8 @@ export default function Notifications() {
         ) : items.length === 0 ? (
           <div className="rounded-2xl border border-border bg-card p-10 text-center">
             <Bell className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-            <p className="text-muted-foreground font-medium mb-1">You’re all caught up</p>
-            <p className="text-sm text-muted-foreground">
-              When someone you follow publishes a fundraiser or crosses a funding milestone (25% / 50% / 75% /
-              100%), it shows up here. Open Explore → Network activity to see gifts and shares from people you follow.
-            </p>
+            <p className="text-muted-foreground font-medium mb-1">{t('notifications.emptyTitle')}</p>
+            <p className="text-sm text-muted-foreground">{t('notifications.emptyBody')}</p>
           </div>
         ) : (
           <ul className="space-y-3">
@@ -138,7 +137,7 @@ export default function Notifications() {
                         onClick={() => void markOneRead(n)}
                         className="text-xs font-semibold text-violet-300 hover:text-violet-200"
                       >
-                        Open campaign →
+                        {t('notifications.openCampaign')}
                       </Link>
                     )}
                     {!n.read_at && (
@@ -147,7 +146,7 @@ export default function Notifications() {
                         onClick={() => void markOneRead(n)}
                         className="text-xs text-muted-foreground hover:text-muted-foreground underline-offset-2 hover:underline"
                       >
-                        Mark read
+                        {t('notifications.markRead')}
                       </button>
                     )}
                   </div>

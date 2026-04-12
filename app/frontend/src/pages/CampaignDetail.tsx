@@ -18,6 +18,7 @@ import {
   Smartphone, Copy, X,   UserPlus, UserCheck, HeartHandshake,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from 'react-i18next';
 
 declare global {
   interface Window {
@@ -79,6 +80,7 @@ function loadScript(src: string) {
 }
 
 export default function CampaignDetail() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -192,9 +194,7 @@ export default function CampaignDetail() {
       await setFollowing(campaign.user_id, next);
       setFollowingOrganizer(next);
       toast.success(
-        next
-          ? 'You’ll see their new fundraisers in Following and notifications.'
-          : 'Unfollowed this organizer.',
+        next ? t('campaignDetail.toastFollowSubscribed') : t('campaignDetail.toastFollowUnsubscribed'),
       );
       const cid = Number(id);
       if (Number.isFinite(cid)) {
@@ -202,7 +202,7 @@ export default function CampaignDetail() {
         if (data) setOrganizerInsights(data);
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not update subscription');
+      toast.error(e instanceof Error ? e.message : t('campaignDetail.toastFollowError'));
     } finally {
       setFollowBusy(false);
     }
@@ -214,12 +214,12 @@ export default function CampaignDetail() {
       return;
     }
     if (campaign?.nsfw_content_hidden) {
-      toast.error('Turn off the NSFW filter in your profile to donate to this fundraiser.');
+      toast.error(t('campaignDetail.toastNsfwDonate'));
       return;
     }
     if (!isPaymentsEnabled()) {
-      toast.info('Payments are not live yet', {
-        description: 'We’re finishing checkout — try again soon.',
+      toast.info(t('campaignDetail.toastPaymentsSoon'), {
+        description: t('campaignDetail.toastPaymentsSoonDesc'),
       });
       return;
     }
@@ -307,8 +307,8 @@ export default function CampaignDetail() {
       <div className="min-h-screen bg-background text-foreground">
         <Header />
         <div id="main-content" tabIndex={-1} className="pt-24 text-center outline-none">
-          <h2 className="text-2xl font-bold mb-4">Campaign Not Found</h2>
-          <Link to="/" className="text-violet-400 hover:text-violet-300">Go Home</Link>
+          <h2 className="text-2xl font-bold mb-4">{t('campaignDetail.notFound')}</h2>
+          <Link to="/" className="text-violet-400 hover:text-violet-300">{t('campaignDetail.goHome')}</Link>
         </div>
       </div>
     );
@@ -333,7 +333,7 @@ export default function CampaignDetail() {
             to="/"
             className="inline-flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
           >
-            <ArrowLeft className="w-4 h-4" /> Back to campaigns
+            <ArrowLeft className="w-4 h-4" /> {t('campaignDetail.backToCampaigns')}
           </Link>
           <Button
             type="button"
@@ -342,7 +342,7 @@ export default function CampaignDetail() {
             className="rounded-xl border-violet-500/35 bg-violet-500/10 text-violet-800 hover:bg-violet-500/15 hover:text-violet-950 dark:text-violet-200 dark:hover:bg-violet-500/20 dark:hover:text-white"
           >
             <Share2 className="w-4 h-4 mr-2" />
-            Share
+            {t('campaignDetail.share')}
           </Button>
         </div>
 
@@ -365,7 +365,7 @@ export default function CampaignDetail() {
           <div className="relative mb-6 overflow-hidden rounded-2xl border border-border bg-muted/70 p-5 dark:border-emerald-500/35 dark:bg-gradient-to-br dark:from-emerald-950/40 dark:to-violet-950/30">
             <button
               type="button"
-              aria-label="Dismiss"
+              aria-label={t('campaignDetail.dismiss')}
               onClick={() => {
                 setShowPostPublish(false);
                 navigate(`/campaign/${campaign.id}`, { replace: true });
@@ -374,14 +374,12 @@ export default function CampaignDetail() {
             >
               <X className="w-5 h-5" />
             </button>
-            <p className="pr-8 text-lg font-bold text-foreground">You’re live — now spread the word</p>
-            <p className="text-sm text-muted-foreground mt-1 mb-4">
-              Share links use rich previews. Add a strong cover photo or short video if you haven’t yet.
-            </p>
+            <p className="pr-8 text-lg font-bold text-foreground">{t('campaignDetail.postPublishTitle')}</p>
+            <p className="text-sm text-muted-foreground mt-1 mb-4">{t('campaignDetail.postPublishBody')}</p>
             <ul className="text-xs text-muted-foreground space-y-1 mb-4 list-disc list-inside">
-              <li>Open “Share it your way” below for every social format</li>
-              <li>Copy your public link from the share dialog</li>
-              <li>On iPhone: Share → Add to Home Screen for an app-like shortcut (PWA)</li>
+              <li>{t('campaignDetail.postPublishLi1')}</li>
+              <li>{t('campaignDetail.postPublishLi2')}</li>
+              <li>{t('campaignDetail.postPublishLi3')}</li>
             </ul>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -390,7 +388,7 @@ export default function CampaignDetail() {
                 className="rounded-xl bg-violet-600 hover:bg-violet-500 text-white border-0"
               >
                 <Share2 className="w-4 h-4 mr-2" />
-                Share it your way
+                {t('campaignDetail.shareYourWay')}
               </Button>
               <Button
                 type="button"
@@ -399,16 +397,16 @@ export default function CampaignDetail() {
                 onClick={async () => {
                   const u = `${window.location.origin}/api/share/campaign/${campaign.id}`;
                   await navigator.clipboard.writeText(u);
-                  toast.success('Share link copied — great for bios and DMs');
+                  toast.success(t('campaignDetail.copyShareToast'));
                 }}
               >
                 <Copy className="w-4 h-4 mr-2" />
-                Copy share link
+                {t('campaignDetail.copyShareLink')}
               </Button>
             </div>
             <p className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground">
               <Smartphone className="w-3.5 h-3.5" />
-              Tip: installed Dolli from the browser feels faster on the next visit.
+              {t('campaignDetail.postPublishTip')}
             </p>
           </div>
         )}
@@ -416,9 +414,7 @@ export default function CampaignDetail() {
         {referrer && (
           <div className="mb-6 p-4 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center gap-3">
             <Sparkles className="w-5 h-5 text-violet-400 flex-shrink-0" />
-            <p className="text-sm text-violet-800 dark:text-violet-300">
-              You were invited by a friend! Your donation helps reach the goal faster.
-            </p>
+            <p className="text-sm text-violet-800 dark:text-violet-300">{t('campaignDetail.referrerBanner')}</p>
           </div>
         )}
 
@@ -466,11 +462,11 @@ export default function CampaignDetail() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                      Organizer
+                      {t('campaignDetail.organizer')}
                     </p>
                     <div className="flex flex-wrap items-center gap-2 min-w-0">
                       <p className="truncate text-lg font-semibold text-foreground">
-                        {organizerInsights.display_name || 'Community member'}
+                        {organizerInsights.display_name || t('campaignDetail.communityMember')}
                       </p>
                       {organizerInsights.is_verified_organization &&
                         organizerInsights.organization_badge_label && (
@@ -482,7 +478,7 @@ export default function CampaignDetail() {
                       {organizerInsights.curated_badge_label && (
                         <span
                           className="inline-flex items-center gap-1 shrink-0 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-200"
-                          title="Recognized by Dolli for helping grow the platform."
+                          title={t('campaignDetail.curatedBadgeTitle')}
                         >
                           <Sparkles className="w-3.5 h-3.5 text-amber-300" aria-hidden />
                           {organizerInsights.curated_badge_label}
@@ -491,27 +487,24 @@ export default function CampaignDetail() {
                       {organizerInsights.viewer_friends_with_organizer && (
                         <span
                           className="inline-flex items-center gap-1 shrink-0 rounded-full border border-sky-500/35 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-sky-200"
-                          title="You follow each other on Dolli."
+                          title={t('campaignDetail.friendsBadgeTitle')}
                         >
                           <HeartHandshake className="w-3.5 h-3.5 text-sky-300" aria-hidden />
-                          Friends
+                          {t('campaignDetail.friendsBadge')}
                         </span>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       {organizerInsights.is_verified_organization
-                        ? 'This organizer is a verified organization on Dolli.'
-                        : 'Public activity on Dolli — helps you see who is behind this fundraiser.'}
-                      {organizerInsights.curated_badge_label
-                        ? ' The platform badge highlights early partners and other supporters you can trust as Dolli grows.'
-                        : ''}
+                        ? t('campaignDetail.orgVerifiedLine')
+                        : t('campaignDetail.individualLine')}
+                      {organizerInsights.curated_badge_label ? t('campaignDetail.curatedLineSuffix') : ''}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                       <p className="text-xs text-muted-foreground">
-                        <span className="font-medium text-muted-foreground">
-                          {(organizerInsights.organizer_follower_count ?? 0).toLocaleString()}
-                        </span>{' '}
-                        follower{(organizerInsights.organizer_follower_count ?? 0) === 1 ? '' : 's'} on Dolli
+                        {t('campaignDetail.followersOnDolli', {
+                          count: organizerInsights.organizer_follower_count ?? 0,
+                        })}
                       </p>
                       {user && campaign.user_id !== user.id && (
                         <Button
@@ -529,12 +522,12 @@ export default function CampaignDetail() {
                           {followingOrganizer ? (
                             <>
                               <UserCheck className="w-4 h-4 mr-1.5" />
-                              Following
+                              {t('campaignDetail.following')}
                             </>
                           ) : (
                             <>
                               <UserPlus className="w-4 h-4 mr-1.5" />
-                              Follow
+                              {t('campaignDetail.follow')}
                             </>
                           )}
                         </Button>
@@ -553,13 +546,15 @@ export default function CampaignDetail() {
                           <div>
                             <p className="text-sm font-semibold text-foreground">
                               {organizerInsights.paid_donations_count === 0
-                                ? 'No completed gifts yet'
-                                : `${organizerInsights.paid_donations_count} completed gift${organizerInsights.paid_donations_count === 1 ? '' : 's'}`}
+                                ? t('campaignDetail.giftsTitleZero')
+                                : t('campaignDetail.giftsTitleMany', {
+                                    count: organizerInsights.paid_donations_count,
+                                  })}
                             </p>
                             <p className="text-[11px] text-muted-foreground leading-snug">
                               {organizerInsights.paid_donations_count === 0
-                                ? 'They haven’t finished a paid donation on Dolli (yet).'
-                                : 'Paid donations they’ve made to any campaign on Dolli.'}
+                                ? t('campaignDetail.giftsHintZero')
+                                : t('campaignDetail.giftsHintMany')}
                             </p>
                           </div>
                         </div>
@@ -570,13 +565,24 @@ export default function CampaignDetail() {
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-foreground">
-                            {organizerInsights.campaigns_created_total} fundraiser
-                            {organizerInsights.campaigns_created_total === 1 ? '' : 's'} created
+                            {organizerInsights.campaigns_created_total === 1
+                              ? t('campaignDetail.campaignsCreatedOne', {
+                                  count: organizerInsights.campaigns_created_total,
+                                })
+                              : t('campaignDetail.campaignsCreatedMany', {
+                                  count: organizerInsights.campaigns_created_total,
+                                })}
                           </p>
                           <p className="text-[11px] text-muted-foreground leading-snug">
-                            {organizerInsights.campaigns_active_count} live now
+                            {t('campaignDetail.campaignsLiveLine', {
+                              active: organizerInsights.campaigns_active_count,
+                            })}
                             {organizerInsights.campaigns_created_total !== organizerInsights.campaigns_active_count
-                              ? ` · ${organizerInsights.campaigns_created_total - organizerInsights.campaigns_active_count} draft or ended`
+                              ? t('campaignDetail.campaignsDraftSuffix', {
+                                  n:
+                                    organizerInsights.campaigns_created_total -
+                                    organizerInsights.campaigns_active_count,
+                                })
                               : ''}
                             .
                           </p>
@@ -592,24 +598,24 @@ export default function CampaignDetail() {
               <div className="bg-card rounded-xl p-4 border border-border text-center">
                 <Users className="w-5 h-5 text-violet-400 mx-auto mb-1" />
                 <div className="text-xl font-bold">{campaign.donor_count.toLocaleString()}</div>
-                <div className="text-xs text-muted-foreground">Donors</div>
+                <div className="text-xs text-muted-foreground">{t('campaignDetail.statDonors')}</div>
               </div>
               <div className="bg-card rounded-xl p-4 border border-border text-center">
                 <Share2 className="w-5 h-5 text-blue-400 mx-auto mb-1" />
                 <div className="text-xl font-bold">{campaign.share_count.toLocaleString()}</div>
-                <div className="text-xs text-muted-foreground">Shares</div>
+                <div className="text-xs text-muted-foreground">{t('campaignDetail.statShares')}</div>
               </div>
               <div className="bg-card rounded-xl p-4 border border-border text-center">
                 <Clock className="w-5 h-5 text-amber-400 mx-auto mb-1" />
                 <div className="text-xl font-bold">{Math.round(progress)}%</div>
-                <div className="text-xs text-muted-foreground">Funded</div>
+                <div className="text-xs text-muted-foreground">{t('campaignDetail.statFunded')}</div>
               </div>
             </div>
           </div>
 
           <div className="lg:col-span-2">
             <h2 id="give-panel-heading" className="sr-only">
-              Donate and share this fundraiser
+              {t('campaignDetail.givePanelSr')}
             </h2>
             <div
               className="sticky top-24 space-y-6 rounded-2xl border border-border bg-card p-6"
@@ -617,25 +623,26 @@ export default function CampaignDetail() {
             >
               {nsfwBlocked && (
                 <div className="rounded-xl border border-amber-500/40 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-500/35 dark:bg-amber-500/10 dark:text-amber-100">
-                  <p className="mb-1 font-semibold text-amber-950 dark:text-white">Sensitive fundraiser</p>
+                  <p className="mb-1 font-semibold text-amber-950 dark:text-white">{t('campaignDetail.nsfwTitle')}</p>
                   <p className="text-xs leading-relaxed text-amber-900/90 dark:text-amber-200/90">
-                    Your NSFW filter is on. Open{' '}
+                    {t('campaignDetail.nsfwBodyBefore')}{' '}
                     <Link
                       to="/profile"
                       className="font-semibold text-amber-950 underline hover:text-amber-800 dark:text-white dark:hover:text-amber-50"
                     >
-                      profile settings
+                      {t('campaignDetail.profileSettings')}
                     </Link>{' '}
-                    and turn the filter off to see the full page and donate.
+                    {t('campaignDetail.nsfwBodyAfter')}
                   </p>
                 </div>
               )}
               {!paymentsLive && (
                 <div className="rounded-xl border border-sky-500/40 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-500/35 dark:bg-sky-500/10 dark:text-sky-100">
-                  <p className="mb-1 font-semibold text-sky-950 dark:text-white">Checkout coming soon</p>
+                  <p className="mb-1 font-semibold text-sky-950 dark:text-white">
+                    {t('campaignDetail.checkoutSoonTitle')}
+                  </p>
                   <p className="text-xs leading-relaxed text-sky-900/90 dark:text-sky-200/90">
-                    Card and wallet payments are not connected on this environment yet. You can still explore
-                    campaigns and share them — donations will open here shortly.
+                    {t('campaignDetail.checkoutSoonBody')}
                   </p>
                 </div>
               )}
@@ -645,7 +652,7 @@ export default function CampaignDetail() {
                     ${campaign.raised_amount.toLocaleString()}
                   </span>
                   <span className="text-muted-foreground text-sm mt-2">
-                    of ${campaign.goal_amount.toLocaleString()}
+                    {t('campaignDetail.raisedOf', { goal: campaign.goal_amount.toLocaleString() })}
                   </span>
                 </div>
                 <div className="h-3 overflow-hidden rounded-full bg-muted">
@@ -655,14 +662,13 @@ export default function CampaignDetail() {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  {campaign.donor_count.toLocaleString()} people have donated
+                  {t('campaignDetail.peopleDonated', { count: campaign.donor_count })}
                 </p>
               </div>
 
               {paymentsLive && lastFeeBps != null && (
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Transparency: a platform fee of up to {(lastFeeBps / 100).toFixed(1)}% is recorded on the organizer
-                  side at checkout. The amount you choose to give is unchanged.
+                  {t('campaignDetail.feeTransparency', { pct: (lastFeeBps / 100).toFixed(1) })}
                 </p>
               )}
 
@@ -672,12 +678,9 @@ export default function CampaignDetail() {
                 }`}
               >
                 <p className="text-sm font-semibold text-foreground" id="gift-amount-label">
-                  Choose amount
+                  {t('campaignDetail.chooseAmount')}
                 </p>
-                <p className="text-[11px] leading-relaxed text-muted-foreground">
-                  Micro-gifts stay impulse-sized — like a super-like, but it funds real work. Change any time before you
-                  pay.
-                </p>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">{t('campaignDetail.chooseAmountHint')}</p>
                 <div
                   className="flex flex-wrap gap-2"
                   role="radiogroup"
@@ -703,7 +706,7 @@ export default function CampaignDetail() {
                 </div>
 
                 <p className="text-sm font-semibold text-foreground" id="payment-method-label">
-                  Payment method
+                  {t('campaignDetail.paymentMethod')}
                 </p>
                 <div className="grid grid-cols-1 gap-2" role="group" aria-labelledby="payment-method-label">
                   <button
@@ -716,8 +719,8 @@ export default function CampaignDetail() {
                         : 'border-border bg-muted text-muted-foreground hover:border-muted-foreground/30'
                     }`}
                   >
-                    <div className="font-medium">Halyk EPAY</div>
-                    <div className="text-xs text-muted-foreground">Cards, Apple Pay and Google Pay through the payment gateway</div>
+                    <div className="font-medium">{t('campaignDetail.halykTitle')}</div>
+                    <div className="text-xs text-muted-foreground">{t('campaignDetail.halykDesc')}</div>
                   </button>
                   <button
                     type="button"
@@ -729,24 +732,23 @@ export default function CampaignDetail() {
                         : 'border-border bg-muted text-muted-foreground hover:border-muted-foreground/30'
                     }`}
                   >
-                    <div className="font-medium">Kaspi Pay</div>
-                    <div className="text-xs text-muted-foreground">Remote Kaspi payment link for Kazakhstan-first checkout</div>
+                    <div className="font-medium">{t('campaignDetail.kaspiTitle')}</div>
+                    <div className="text-xs text-muted-foreground">{t('campaignDetail.kaspiDesc')}</div>
                   </button>
                 </div>
               </div>
 
               {campaign.donor_count > 0 && paymentsLive && !nsfwBlocked && (
                 <p className="text-center text-[11px] text-muted-foreground">
-                  <span className="font-semibold text-muted-foreground">
-                    {campaign.donor_count.toLocaleString()} people
-                  </span>{' '}
-                  already chipped in — mostly small amounts. You’re not doing this alone.
+                  {t('campaignDetail.chippedIn', { count: campaign.donor_count })}
                 </p>
               )}
 
               <Button
                 onClick={() => handleDonate(giftAmount)}
                 disabled={donateDisabled}
+                aria-busy={donating}
+                aria-label={donating ? t('campaignDetail.donateLoading') : undefined}
                 className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-bold text-lg py-7 rounded-2xl shadow-2xl shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all border-0"
               >
                 {donating ? (
@@ -755,43 +757,39 @@ export default function CampaignDetail() {
                   <>
                     <Heart className="w-5 h-5 mr-2 fill-white" />
                     {!paymentsLive
-                      ? 'Payments soon'
+                      ? t('campaignDetail.paymentsSoon')
                       : selectedProvider === 'kaspi_pay'
-                        ? `Send $${giftAmount} · Kaspi`
-                        : `Send $${giftAmount}`}
+                        ? t('campaignDetail.sendKaspi', { amount: giftAmount })
+                        : t('campaignDetail.sendAmount', { amount: giftAmount })}
                   </>
                 )}
               </Button>
 
               <p className="text-center text-[11px] text-muted-foreground">
-                {paymentsLive
-                  ? 'Checkout opens on your bank’s page — Dolli never stores your card. No subscription, no guilt-trip upsell.'
-                  : 'When payments go live, you’ll finish in a few taps and land right back here.'}
+                {paymentsLive ? t('campaignDetail.checkoutHintLive') : t('campaignDetail.checkoutHintSoon')}
               </p>
 
               <p className="text-xs text-muted-foreground">
                 {!paymentsLive
-                  ? 'When payments go live, you’ll complete checkout in a few taps from this page.'
+                  ? t('campaignDetail.paymentFootSoon')
                   : selectedProvider === 'halyk_epay'
-                    ? 'Halyk EPAY opens a secure hosted payment form and returns you to Dolli after payment.'
-                    : 'Kaspi Pay currently opens a remote payment link. Final confirmation is handled after merchant-side payment confirmation.'}
+                    ? t('campaignDetail.paymentFootLiveHalyk')
+                    : t('campaignDetail.paymentFootLiveKaspi')}
               </p>
 
               <div className="border-t border-border pt-5">
                 <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
                   <Share2 className="w-4 h-4 text-violet-400" />
-                  Multiply the impact
+                  {t('campaignDetail.multiplyTitle')}
                 </p>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Same energy as reposting a story — but friends land with your link so impact can compound.
-                </p>
+                <p className="text-xs text-muted-foreground mb-4">{t('campaignDetail.multiplyBody')}</p>
                 <Button
                   type="button"
                   onClick={() => setShareOpen(true)}
                   className="w-full rounded-xl bg-gradient-to-r from-violet-600/90 to-pink-600/90 hover:from-violet-500 hover:to-pink-500 text-white font-semibold border-0 py-6 shadow-lg shadow-violet-500/15"
                 >
                   <Share2 className="w-5 h-5 mr-2" />
-                  Share it your way
+                  {t('campaignDetail.multiplyCta')}
                 </Button>
               </div>
             </div>

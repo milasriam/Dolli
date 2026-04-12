@@ -10,6 +10,7 @@ import { Heart, Share2, Trophy, ArrowRight, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import confetti from 'canvas-confetti';
 import { trackClientEvent } from '@/lib/productAnalytics';
+import { useTranslation } from 'react-i18next';
 
 const MAX_VERIFY_ROUNDS = 20;
 
@@ -25,6 +26,7 @@ interface Campaign {
 type PaymentState = 'verifying' | 'paid' | 'pending' | 'failed' | 'error';
 
 export default function DonationSuccess() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const { user, login } = useAuth();
   const invoiceId = searchParams.get('invoice_id') || searchParams.get('session_id');
@@ -166,10 +168,13 @@ export default function DonationSuccess() {
         {paymentStatus === 'verifying' && (
           <div className="text-center py-20">
             <div className="w-16 h-16 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground font-medium">Verifying your donation…</p>
+            <p className="text-muted-foreground font-medium">{t('donationSuccess.verifying')}</p>
             <p className="text-xs text-muted-foreground mt-2">
-              Contacting the payment provider
-              {verifyAttempt > 0 ? ` (round ${verifyAttempt} of ${MAX_VERIFY_ROUNDS})` : ''}.
+              {t('donationSuccess.verifyingSub')}
+              {verifyAttempt > 0
+                ? t('donationSuccess.verifyingRound', { current: verifyAttempt, max: MAX_VERIFY_ROUNDS })
+                : ''}
+              .
             </p>
           </div>
         )}
@@ -177,11 +182,11 @@ export default function DonationSuccess() {
         {paymentStatus === 'error' && (
           <div className="text-center py-20">
             <div className="text-5xl mb-4">😔</div>
-            <h2 className="text-2xl font-bold mb-2">Something went wrong</h2>
-            <p className="text-muted-foreground mb-6">We could not verify your payment yet. Please try again.</p>
+            <h2 className="text-2xl font-bold mb-2">{t('donationSuccess.errorTitle')}</h2>
+            <p className="text-muted-foreground mb-6">{t('donationSuccess.errorBody')}</p>
             <Link to={`/campaign/${campaignId}`}>
               <Button className="bg-violet-600 hover:bg-violet-500 text-white border-0">
-                Back to Campaign
+                {t('donationSuccess.backToCampaign')}
               </Button>
             </Link>
           </div>
@@ -190,11 +195,11 @@ export default function DonationSuccess() {
         {paymentStatus === 'failed' && (
           <div className="text-center py-20">
             <div className="text-5xl mb-4">💳</div>
-            <h2 className="text-2xl font-bold mb-2">Payment Was Not Completed</h2>
-            <p className="text-muted-foreground mb-6">You can return to the campaign and try again with another method.</p>
+            <h2 className="text-2xl font-bold mb-2">{t('donationSuccess.failedTitle')}</h2>
+            <p className="text-muted-foreground mb-6">{t('donationSuccess.failedBody')}</p>
             <Link to={`/campaign/${campaignId}`}>
               <Button className="bg-violet-600 hover:bg-violet-500 text-white border-0">
-                Return to Campaign
+                {t('donationSuccess.returnToCampaign')}
               </Button>
             </Link>
           </div>
@@ -206,27 +211,30 @@ export default function DonationSuccess() {
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 shadow-2xl shadow-amber-500/30 mb-4">
                 <Heart className="w-10 h-10 text-white" />
               </div>
-              <h1 className="text-3xl font-black mb-2">Donation Is Processing</h1>
-              <p className="text-muted-foreground">We are waiting for payment confirmation from {provider === 'kaspi_pay' ? 'Kaspi Pay' : 'Halyk EPAY'}.</p>
+              <h1 className="text-3xl font-black mb-2">{t('donationSuccess.pendingTitle')}</h1>
+              <p className="text-muted-foreground">
+                {provider === 'kaspi_pay'
+                  ? t('donationSuccess.pendingBodyKaspi')
+                  : t('donationSuccess.pendingBodyHalyk')}
+              </p>
             </div>
 
             <div className="bg-card rounded-2xl border border-border p-5 text-sm text-muted-foreground space-y-2">
-              <p>Invoice: <span className="text-white font-medium">{invoiceId}</span></p>
-              <p>Provider: <span className="text-white font-medium">{provider}</span></p>
+              <p>
+                {t('donationSuccess.invoice')}: <span className="text-white font-medium">{invoiceId}</span>
+              </p>
+              <p>
+                {t('donationSuccess.provider')}: <span className="text-white font-medium">{provider}</span>
+              </p>
               <p className="text-muted-foreground">
-                {provider === 'kaspi_pay'
-                  ? 'Kaspi Pay is currently confirmed manually after payment on the merchant side.'
-                  : 'If you just completed the payment, refresh this page in a few seconds.'}
+                {provider === 'kaspi_pay' ? t('donationSuccess.kaspiNote') : t('donationSuccess.halykNote')}
               </p>
             </div>
 
             {verifyStalled && (
               <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                <p className="font-semibold text-white mb-1">Still processing</p>
-                <p className="text-xs text-amber-200/90 leading-relaxed">
-                  We stopped auto-checking after several tries. If you completed payment, use “Check again” — it can take a
-                  minute for the bank to confirm.
-                </p>
+                <p className="font-semibold text-white mb-1">{t('donationSuccess.stalledTitle')}</p>
+                <p className="text-xs text-amber-200/90 leading-relaxed">{t('donationSuccess.stalledBody')}</p>
               </div>
             )}
 
@@ -239,11 +247,11 @@ export default function DonationSuccess() {
                 className="flex-1 bg-violet-600 hover:bg-violet-500 text-white border-0"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
-                Check again
+                {t('donationSuccess.checkAgain')}
               </Button>
               <Link to={`/campaign/${campaignId}`} className="flex-1">
                 <Button variant="outline" className="w-full !bg-transparent border-border text-white">
-                  Back
+                  {t('common.back')}
                 </Button>
               </Link>
             </div>
@@ -256,11 +264,8 @@ export default function DonationSuccess() {
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-2xl shadow-emerald-500/30 mb-4">
                 <Heart className="w-10 h-10 text-white fill-white" />
               </div>
-              <h1 className="text-3xl font-black mb-2">That actually landed 🎉</h1>
-              <p className="text-muted-foreground">
-                You turned a scroll-moment into fuel for this fundraiser — optional next step: let your people know so
-                they can pile on.
-              </p>
+              <h1 className="text-3xl font-black mb-2">{t('donationSuccess.paidTitle')}</h1>
+              <p className="text-muted-foreground">{t('donationSuccess.paidBody')}</p>
             </div>
 
             {campaign && (
@@ -293,31 +298,28 @@ export default function DonationSuccess() {
             <div className="bg-card rounded-2xl border border-border p-5 space-y-4">
               <h3 className="font-bold text-white flex items-center gap-2">
                 <Trophy className="w-5 h-5 text-amber-400" />
-                Rewards Earned
+                {t('donationSuccess.rewardsTitle')}
               </h3>
               <div className="grid grid-cols-3 gap-3">
                 <div className="text-center p-3 rounded-xl bg-white/5 border border-border">
                   <div className="text-2xl mb-1">*</div>
-                  <div className="text-xs text-muted-foreground">First Dollar</div>
+                  <div className="text-xs text-muted-foreground">{t('donationSuccess.rewardFirst')}</div>
                 </div>
                 <div className="text-center p-3 rounded-xl bg-white/5 border border-border">
                   <div className="text-2xl mb-1">+</div>
-                  <div className="text-xs text-muted-foreground">Streak +1</div>
+                  <div className="text-xs text-muted-foreground">{t('donationSuccess.rewardStreak')}</div>
                 </div>
                 <div className="text-center p-3 rounded-xl bg-white/5 border border-border">
                   <div className="text-2xl mb-1">KZT</div>
-                  <div className="text-xs text-muted-foreground">Impact Added</div>
+                  <div className="text-xs text-muted-foreground">{t('donationSuccess.rewardImpact')}</div>
                 </div>
               </div>
             </div>
 
             <div className="bg-gradient-to-br from-violet-500/10 to-pink-500/10 rounded-2xl border border-violet-500/20 p-6 text-center">
               <Share2 className="w-8 h-8 text-violet-400 mx-auto mb-3" />
-              <h3 className="text-xl font-bold mb-2">Pass the vibe</h3>
-              <p className="text-sm text-muted-foreground mb-5">
-                If you’re signed in, your link attributes the ripple to you — Stories, WhatsApp, Telegram, QR, native
-                share.
-              </p>
+              <h3 className="text-xl font-bold mb-2">{t('donationSuccess.passTitle')}</h3>
+              <p className="text-sm text-muted-foreground mb-5">{t('donationSuccess.passBody')}</p>
               <Button
                 type="button"
                 onClick={() => setShareOpen(true)}
@@ -325,7 +327,7 @@ export default function DonationSuccess() {
                 className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 text-white font-semibold py-6 border-0 shadow-lg shadow-violet-500/20"
               >
                 <Share2 className="w-5 h-5 mr-2" />
-                Share in one tap
+                {t('donationSuccess.shareOneTap')}
               </Button>
             </div>
 
@@ -334,7 +336,7 @@ export default function DonationSuccess() {
                 open={shareOpen}
                 onOpenChange={setShareOpen}
                 campaignId={cid}
-                campaignTitle={campaign?.title || 'This fundraiser'}
+                campaignTitle={campaign?.title || t('donationSuccess.thisFundraiser')}
                 campaignImageUrl={campaign?.image_url}
                 raisedAmount={campaign?.raised_amount}
                 goalAmount={campaign?.goal_amount}
@@ -349,12 +351,12 @@ export default function DonationSuccess() {
             <div className="flex gap-3">
               <Link to="/explore" className="flex-1">
                 <Button variant="outline" className="w-full !bg-transparent border-border text-white rounded-xl py-6">
-                  Explore More
+                  {t('donationSuccess.exploreMore')}
                 </Button>
               </Link>
               <Link to="/profile" className="flex-1">
                 <Button className="w-full bg-violet-600 hover:bg-violet-500 text-white rounded-xl py-6 border-0">
-                  My Impact <ArrowRight className="w-4 h-4 ml-1" />
+                  {t('donationSuccess.myImpact')} <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
               </Link>
             </div>

@@ -9,8 +9,10 @@ import { fetchFollowStatus, fetchFriendStatus, setFollowing } from '@/lib/follow
 import { Button } from '@/components/ui/button';
 import { Search, Building2, UserPlus, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 export default function UserSearch() {
+  const { t } = useTranslation();
   const { user, login } = useAuth();
   const [params, setParams] = useSearchParams();
   const qParam = (params.get('q') || '').trim();
@@ -90,9 +92,9 @@ export default function UserSearch() {
       setFollowMap((prev) => ({ ...prev, [row.user_id]: !cur }));
       const fr = await fetchFriendStatus(row.user_id);
       setFriendMap((prev) => ({ ...prev, [row.user_id]: Boolean(fr?.friends) }));
-      toast.success(!cur ? 'Subscribed — their fundraisers & milestones will surface for you.' : 'Unfollowed.');
+      toast.success(!cur ? t('userSearch.subscribedToast') : t('userSearch.unfollowedToast'));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not update follow');
+      toast.error(e instanceof Error ? e.message : t('userSearch.followError'));
     } finally {
       setBusyId(null);
     }
@@ -106,10 +108,7 @@ export default function UserSearch() {
         tabIndex={-1}
         className="mx-auto w-full max-w-2xl flex-1 px-4 pb-20 pt-24 outline-none sm:px-6"
       >
-        <PageHeader
-          title="Find people & organizations"
-          description="Search by name, public profile title, or organization. Then follow to tailor your feeds and notifications."
-        />
+        <PageHeader title={t('userSearch.title')} description={t('userSearch.description')} />
 
         <form
           className="flex gap-2 mb-8"
@@ -123,13 +122,13 @@ export default function UserSearch() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Name, org, or email fragment…"
+              placeholder={t('userSearch.placeholder')}
               className="w-full pl-10 pr-3 py-3 rounded-xl bg-card border border-border text-white placeholder-slate-500 focus:outline-none focus:border-violet-500/40"
-              aria-label="Search users"
+              aria-label={t('userSearch.ariaSearch')}
             />
           </div>
           <Button type="submit" className="rounded-xl bg-violet-600 hover:bg-violet-500 px-6">
-            Search
+            {t('common.search')}
           </Button>
         </form>
 
@@ -140,9 +139,9 @@ export default function UserSearch() {
             ))}
           </div>
         ) : !qParam ? (
-          <p className="text-muted-foreground text-sm">Type a query and press Search.</p>
+          <p className="text-muted-foreground text-sm">{t('userSearch.hintEmpty')}</p>
         ) : results.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No matches for “{qParam}”.</p>
+          <p className="text-muted-foreground text-sm">{t('userSearch.noMatches', { q: qParam })}</p>
         ) : (
           <ul className="space-y-2">
             {results.map((row) => (
@@ -165,7 +164,7 @@ export default function UserSearch() {
                       <p className="font-semibold text-white truncate">{row.display_name}</p>
                       {friendMap[row.user_id] && (
                         <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-sky-300 border border-sky-500/35 rounded-full px-2 py-0.5">
-                          Friends
+                          {t('userSearch.friendsBadge')}
                         </span>
                       )}
                     </div>
@@ -188,11 +187,11 @@ export default function UserSearch() {
                     >
                       {followMap[row.user_id] ? (
                         <>
-                          <UserCheck className="w-4 h-4 mr-1" /> Following
+                          <UserCheck className="w-4 h-4 mr-1" /> {t('userSearch.following')}
                         </>
                       ) : (
                         <>
-                          <UserPlus className="w-4 h-4 mr-1" /> Follow
+                          <UserPlus className="w-4 h-4 mr-1" /> {t('userSearch.follow')}
                         </>
                       )}
                     </Button>
@@ -202,10 +201,7 @@ export default function UserSearch() {
             ))}
           </ul>
         )}
-        <p className="text-[11px] text-slate-600 mt-8">
-          Tip: open someone’s fundraiser and use <strong className="text-muted-foreground">Follow</strong> on the organizer
-          card to connect your feeds.
-        </p>
+        <p className="text-[11px] text-slate-600 mt-8">{t('userSearch.footerTip')}</p>
       </main>
       <SiteFooter />
     </div>

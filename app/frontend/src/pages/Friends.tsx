@@ -6,8 +6,10 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchMyFriends, type FriendBrief } from '@/lib/friends';
 import { HeartHandshake, Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function Friends() {
+  const { t } = useTranslation();
   const { user, login } = useAuth();
   const [items, setItems] = useState<FriendBrief[]>([]);
   const [total, setTotal] = useState(0);
@@ -44,16 +46,14 @@ export default function Friends() {
           className="mx-auto w-full max-w-lg flex-1 px-4 pb-16 pt-24 text-center outline-none"
         >
           <HeartHandshake className="w-14 h-14 text-sky-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold mb-2">Friends on Dolli</h1>
-          <p className="text-muted-foreground text-sm mb-6">
-            Friends are mutual follows — you and another member both follow each other. Sign in to see yours.
-          </p>
+          <h1 className="text-2xl font-bold mb-2">{t('friends.guestTitle')}</h1>
+          <p className="text-muted-foreground text-sm mb-6">{t('friends.guestBody')}</p>
           <button
             type="button"
             onClick={() => login()}
             className="rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-3"
           >
-            Sign in
+            {t('nav.signIn')}
           </button>
         </main>
         <SiteFooter />
@@ -75,15 +75,15 @@ export default function Friends() {
               <HeartHandshake className="h-6 w-6 text-sky-300" aria-hidden />
             </PageHeaderIconFrame>
           }
-          title="Friends"
-          description={`Mutual follows (${total.toLocaleString()}). Activity from friends is in Explore → Friends.`}
+          title={t('friends.title')}
+          description={t('friends.description', { count: total })}
           auxiliary={
             <Link
               to="/search/users"
               className="inline-flex items-center gap-2 text-sm font-semibold text-violet-300 transition-colors hover:text-violet-200"
             >
               <Search className="h-4 w-4" aria-hidden />
-              Find people &amp; orgs
+              {t('friends.findPeople')}
             </Link>
           }
         />
@@ -96,10 +96,8 @@ export default function Friends() {
           </div>
         ) : items.length === 0 ? (
           <div className="rounded-2xl border border-border bg-card px-6 py-12 text-center">
-            <p className="text-muted-foreground font-medium mb-2">No friends yet</p>
-            <p className="text-sm text-muted-foreground">
-              Follow someone from a fundraiser or People search — when they follow you back, you’ll both show up here.
-            </p>
+            <p className="text-muted-foreground font-medium mb-2">{t('friends.emptyTitle')}</p>
+            <p className="text-sm text-muted-foreground">{t('friends.emptyBody')}</p>
           </div>
         ) : (
           <ul className="space-y-2">
@@ -109,14 +107,14 @@ export default function Friends() {
                 className="rounded-xl border border-border bg-card px-4 py-3 flex items-center justify-between gap-3"
               >
                 <div className="min-w-0">
-                  <p className="font-semibold text-white truncate">{row.name?.trim() || 'Dolli member'}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">Mutual follow</p>
+                  <p className="font-semibold text-white truncate">{row.name?.trim() || t('friends.dolliMember')}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{t('friends.mutualFollow')}</p>
                 </div>
                 <Link
                   to={`/search/users?q=${encodeURIComponent(row.name?.trim() || row.user_id)}`}
                   className="text-xs font-semibold text-violet-300 hover:text-violet-200 shrink-0"
                 >
-                  Search
+                  {t('common.search')}
                 </Link>
               </li>
             ))}
