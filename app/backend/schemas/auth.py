@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserResponse(BaseModel):
@@ -20,6 +20,15 @@ class UserResponse(BaseModel):
     curated_badge_slug: Optional[str] = None
     # Extra visual treatment for invited partners: "frame" (contrast ring), "featured" (reserved for future paid promo).
     curated_highlight: Optional[str] = None
+    # Account & linked social (for profile / security UI).
+    has_password: bool = False
+    tiktok_connected: bool = False
+    tiktok_primary_login: bool = False
+    tiktok_display_name: Optional[str] = None
+    meta_connected: bool = False
+    meta_primary_login: bool = False
+    meta_display_name: Optional[str] = None
+    instagram_handle: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -64,13 +73,48 @@ class TokenExchangeResponse(BaseModel):
 
 
 class LoginOptionsResponse(BaseModel):
-    """Public: which sign-in methods the SPA should show."""
+    """Public: which sign-in methods the SPA should show.
+
+    password: email/password form (DB-backed and/or legacy single-account).
+    email_signup: POST /register enabled.
+    magic_link: magic-link email sign-in (requires SMTP + ALLOW_MAGIC_LINK).
+    password_reset: forgot-password email (requires SMTP + ALLOW_PASSWORD_RESET).
+    """
 
     google_oidc: bool = False
     tiktok: bool = False
     meta_facebook: bool = False
     password: bool = False
+    email_signup: bool = False
+    magic_link: bool = False
+    password_reset: bool = False
     local_demo_redirect: bool = False
+
+
+class SocialAuthorizeUrlResponse(BaseModel):
+    """JSON alternative to 302 OAuth start — SPA opens url in the browser (Bearer not sent to TikTok/Meta)."""
+
+    url: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    """Always generic to avoid email enumeration."""
+
+    sent: bool = True
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=10, max_length=500)
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=200)
+    new_password: str = Field(..., min_length=8, max_length=128)
 
 
 class UserNotificationResponse(BaseModel):

@@ -67,6 +67,52 @@ def _frontend_base_url() -> str:
     return (os.environ.get("FRONTEND_URL") or "https://dolli.space").strip().rstrip("/")
 
 
+async def send_password_reset_email(to_email: str, reset_url: str) -> None:
+    """Forgot-password link; no-op when SMTP_HOST is unset."""
+    if not (os.environ.get("SMTP_HOST") or "").strip():
+        logger.info("password_reset_email skipped (SMTP_HOST unset) to=%s", to_email)
+        return
+    subject = "Reset your Dolli password"
+    body = (
+        "Use this one-time link to set a new password (valid about one hour):\n\n"
+        f"{reset_url}\n\n"
+        "If you did not request this, you can ignore this email.\n"
+    )
+    try:
+        await asyncio.to_thread(
+            _send_sync,
+            to_addr=to_email.strip(),
+            subject=subject,
+            text_body=body,
+        )
+        logger.info("password_reset_email sent to=%s", to_email)
+    except Exception:
+        logger.exception("password_reset_email failed to=%s", to_email)
+
+
+async def send_magic_login_email(to_email: str, sign_in_url: str) -> None:
+    """Passwordless sign-in link; no-op when SMTP_HOST is unset."""
+    if not (os.environ.get("SMTP_HOST") or "").strip():
+        logger.info("magic_login_email skipped (SMTP_HOST unset) to=%s", to_email)
+        return
+    subject = "Your Dolli sign-in link"
+    body = (
+        "Use this one-time link to sign in to Dolli (valid about 15 minutes):\n\n"
+        f"{sign_in_url}\n\n"
+        "If you did not request this, you can ignore this email.\n"
+    )
+    try:
+        await asyncio.to_thread(
+            _send_sync,
+            to_addr=to_email.strip(),
+            subject=subject,
+            text_body=body,
+        )
+        logger.info("magic_login_email sent to=%s", to_email)
+    except Exception:
+        logger.exception("magic_login_email failed to=%s", to_email)
+
+
 async def send_followers_new_campaign_emails(
     *,
     recipient_emails: list[str],

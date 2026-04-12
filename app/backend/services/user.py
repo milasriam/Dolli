@@ -23,13 +23,8 @@ class UserService:
         return user
 
     @staticmethod
-    async def update_user_profile(
-        db: AsyncSession,
-        user_id: str,
-        name: Optional[str] = None,
-        nsfw_filter_enabled: Optional[bool] = None,
-    ) -> Optional[User]:
-        """Update user profile."""
+    async def update_user_profile(db: AsyncSession, user_id: str, **updates) -> Optional[User]:
+        """Update user profile. Only keys present in ``updates`` are applied (allows clearing fields with null)."""
         start_time = time.time()
         logger.debug(f"[DB_OP] Starting update_user_profile - user_id: {user_id}")
         result = await db.execute(select(User).where(User.id == user_id))
@@ -39,13 +34,33 @@ class UserService:
         if not user:
             return None
 
+        allowed = {"name", "nsfw_filter_enabled", "instagram_handle"}
+        extra = set(updates) - allowed
+        if extra:
+            raise ValueError(f"Unsupported profile fields: {', '.join(sorted(extra))}")
+
         changed = False
-        if name is not None:
-            user.name = name
+        if "name" in updates:
+            user.name = updates["name"]
             changed = True
-        if nsfw_filter_enabled is not None:
-            user.nsfw_filter_enabled = nsfw_filter_enabled
+        if "nsfw_filter_enabled" in updates:
+            user.nsfw_filter_enabled = updates["nsfw_filter_enabled"]
             changed = True
+        if "instagram_handle" in updates:
+            raw = updates["instagram_handle"]
+            if raw is None:
+                user.instagram_handle = None
+                changed = True
+            else:
+                h = raw.strip()
+                if h.startswith("@"):
+                    h = h[1:].strip()
+                if len(h) > 120:
+                    raise ValueError("Instagram handle is too long")
+                if h and not all(c.isascii() and (c.isalnum() or c in "._") for c in h):
+                    raise ValueError("Use ASCII letters, numbers, periods, and underscores only")
+                user.instagram_handle = h or None
+                changed = True
 
         if changed:
             start_time_update = time.time()

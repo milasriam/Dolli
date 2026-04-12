@@ -24,6 +24,14 @@ interface User {
   curated_badge_slug?: string | null;
   /** Extra chrome for partners: "frame" | "featured" (reserved for paid promo). */
   curated_highlight?: string | null;
+  has_password?: boolean;
+  tiktok_connected?: boolean;
+  tiktok_primary_login?: boolean;
+  tiktok_display_name?: string | null;
+  meta_connected?: boolean;
+  meta_primary_login?: boolean;
+  meta_display_name?: string | null;
+  instagram_handle?: string | null;
 }
 
 interface AuthContextType {

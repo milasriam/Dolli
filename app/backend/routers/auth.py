@@ -1,8 +1,11 @@
 import hashlib
 import logging
 import os
+import secrets
+import time
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 from core.auth import (
@@ -18,17 +21,23 @@ from core.auth import (
 )
 from core.config import settings
 from core.database import get_db
-from dependencies.auth import get_admin_user, get_current_user
+from dependencies.auth import _with_curated_badge, get_admin_user, get_current_user, user_row_to_response
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 from fastapi.responses import RedirectResponse, Response
 from models.auth import User
+from models.magic_login import MagicLoginToken
 from schemas.auth import (
     AdminSetUserOrganizationRequest,
+    ChangePasswordRequest,
     EarlyDonorMilestoneResponse,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     LoginOptionsResponse,
     MarkNotificationsReadRequest,
     PlatformTokenExchangeRequest,
+    ResetPasswordRequest,
+    SocialAuthorizeUrlResponse,
     TokenExchangeResponse,
     UnreadNotificationsResponse,
     UserNotificationListResponse,
@@ -36,6 +45,7 @@ from schemas.auth import (
     UserResponse,
 )
 from services.auth import AuthService
+from services.notify_email import send_magic_login_email, send_password_reset_email
 from services.donations import DonationsService
 from services.user_notifications import UserNotificationsService
 from services.social_login import (
@@ -46,11 +56,16 @@ from services.social_login import (
     tiktok_configured,
     tiktok_exchange_and_profile,
 )
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 logger = logging.getLogger(__name__)
+
+_magic_link_last_sent: dict[str, float] = {}
+_MAGIC_LINK_COOLDOWN_SEC = 60.0
+_pwd_reset_last_sent: dict[str, float] = {}
+_PASSWORD_RESET_COOLDOWN_SEC = 60.0
 
 
 def _local_patch(url: str) -> str:
@@ -108,14 +123,46 @@ def is_oidc_configured() -> bool:
     return all(_has_non_empty_setting(field) for field in required)
 
 
-def _redirect_with_app_token(frontend_base: str, app_token: str, expires_at) -> RedirectResponse:
-    fragment = urlencode(
-        {
-            "token": app_token,
-            "expires_at": int(expires_at.timestamp()),
-            "token_type": "Bearer",
-        }
+def is_email_password_auth_enabled() -> bool:
+    return os.environ.get("ALLOW_EMAIL_PASSWORD_AUTH", "").lower() in ("1", "true", "yes")
+
+
+def is_magic_link_feature_enabled() -> bool:
+    if os.environ.get("ALLOW_MAGIC_LINK", "").lower() not in ("1", "true", "yes"):
+        return False
+    return bool((os.environ.get("SMTP_HOST") or "").strip())
+
+
+def is_password_reset_feature_enabled() -> bool:
+    if os.environ.get("ALLOW_PASSWORD_RESET", "").lower() not in ("1", "true", "yes"):
+        return False
+    return bool((os.environ.get("SMTP_HOST") or "").strip())
+
+
+def legacy_fixed_password_enabled() -> bool:
+    allow = os.environ.get("ALLOW_PASSWORD_AUTH", "").lower() in ("1", "true", "yes")
+    if not allow:
+        return False
+    return bool(
+        os.environ.get("LOCAL_LOGIN_EMAIL", "").strip() and os.environ.get("LOCAL_LOGIN_PASSWORD", "")
     )
+
+
+def password_form_enabled() -> bool:
+    return is_email_password_auth_enabled() or legacy_fixed_password_enabled()
+
+
+def _redirect_with_app_token(
+    frontend_base: str, app_token: str, expires_at, *, extra: Optional[dict] = None
+) -> RedirectResponse:
+    q = {
+        "token": app_token,
+        "expires_at": int(expires_at.timestamp()),
+        "token_type": "Bearer",
+    }
+    if extra:
+        q.update(extra)
+    fragment = urlencode(q)
     return RedirectResponse(
         url=f"{frontend_base}/auth/callback?{fragment}",
         status_code=status.HTTP_302_FOUND,
@@ -125,16 +172,15 @@ def _redirect_with_app_token(frontend_base: str, app_token: str, expires_at) -> 
 @router.get("/login-options", response_model=LoginOptionsResponse)
 async def login_options():
     """Public: which OAuth / password methods are enabled (no secrets)."""
-    allow_pw = os.environ.get("ALLOW_PASSWORD_AUTH", "").lower() in ("1", "true", "yes")
-    pw_ok = allow_pw and bool(
-        os.environ.get("LOCAL_LOGIN_EMAIL", "").strip() and os.environ.get("LOCAL_LOGIN_PASSWORD", "")
-    )
     allow_local = os.environ.get("ALLOW_LOCAL_AUTH", "").lower() in ("1", "true", "yes")
     return LoginOptionsResponse(
         google_oidc=is_oidc_configured(),
         tiktok=tiktok_configured(),
         meta_facebook=meta_configured(),
-        password=pw_ok,
+        password=password_form_enabled(),
+        email_signup=is_email_password_auth_enabled(),
+        magic_link=is_magic_link_feature_enabled(),
+        password_reset=is_password_reset_feature_enabled(),
         local_demo_redirect=allow_local and not is_oidc_configured(),
     )
 
@@ -523,7 +569,8 @@ async def admin_set_user_organization(
 
     await db.commit()
     await db.refresh(row)
-    return UserResponse.model_validate(row)
+    base = user_row_to_response(row)
+    return await _with_curated_badge(base, db)
 
 
 @router.get("/logout")
@@ -531,6 +578,136 @@ async def logout():
     """Logout user."""
     logout_url = build_logout_url()
     return {"redirect_url": logout_url}
+
+
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+async def forgot_password(payload: ForgotPasswordRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    if not is_password_reset_feature_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Password reset is not available on this server",
+        )
+    em = payload.email.strip().lower()
+    now = time.monotonic()
+    last = _pwd_reset_last_sent.get(em, 0.0)
+    if now - last < _PASSWORD_RESET_COOLDOWN_SEC:
+        return ForgotPasswordResponse()
+    _pwd_reset_last_sent[em] = now
+
+    auth_service = AuthService(db)
+    user = await auth_service.get_user_by_email_lower(em)
+    if not user:
+        return ForgotPasswordResponse()
+
+    raw = await auth_service.create_password_reset_token_raw(user.id)
+    if not raw:
+        return ForgotPasswordResponse()
+
+    fe = get_frontend_redirect_base(request).rstrip("/")
+    reset_url = f"{fe}/auth/reset-password?token={quote(raw, safe='')}"
+    await send_password_reset_email(user.email, reset_url)
+    return ForgotPasswordResponse()
+
+
+@router.post("/reset-password", response_model=TokenExchangeResponse)
+async def reset_password_with_email_token(payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    if not is_password_reset_feature_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Password reset is not available on this server",
+        )
+    auth_service = AuthService(db)
+    try:
+        user = await auth_service.reset_password_with_token(payload.token, payload.password)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    app_token, _, _ = await auth_service.issue_app_token(user=user)
+    return TokenExchangeResponse(token=app_token)
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password_logged_in(
+    body: ChangePasswordRequest,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    auth_service = AuthService(db)
+    try:
+        await auth_service.change_password(current_user.id, body.current_password, body.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/social/link/tiktok/start", response_model=SocialAuthorizeUrlResponse)
+async def tiktok_social_link_start(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    if not tiktok_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="TikTok login is not configured (set TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET).",
+        )
+    backend_url = get_dynamic_backend_url(request)
+    state = generate_state()
+    nonce = generate_nonce()
+    verifier = generate_code_verifier()
+    challenge = hashlib.sha256(verifier.encode("utf-8")).hexdigest()
+    auth_service = AuthService(db)
+    await auth_service.store_oidc_state(state, nonce, verifier, link_user_id=current_user.id)
+    redirect_uri = f"{backend_url}/api/v1/auth/social/tiktok/callback"
+    url = build_tiktok_authorize_url(redirect_uri=redirect_uri, state=state, code_challenge=challenge)
+    return SocialAuthorizeUrlResponse(url=url)
+
+
+@router.post("/social/link/meta/start", response_model=SocialAuthorizeUrlResponse)
+async def meta_social_link_start(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    if not meta_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Meta login is not configured (set META_APP_ID and META_APP_SECRET).",
+        )
+    backend_url = get_dynamic_backend_url(request)
+    state = generate_state()
+    nonce = generate_nonce()
+    verifier = generate_code_verifier()
+    auth_service = AuthService(db)
+    await auth_service.store_oidc_state(state, nonce, verifier, link_user_id=current_user.id)
+    redirect_uri = f"{backend_url}/api/v1/auth/social/meta/callback"
+    url = build_meta_authorize_url(redirect_uri=redirect_uri, state=state)
+    return SocialAuthorizeUrlResponse(url=url)
+
+
+@router.post("/social/unlink/tiktok", status_code=status.HTTP_204_NO_CONTENT)
+async def tiktok_social_unlink(
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    auth_service = AuthService(db)
+    try:
+        await auth_service.unlink_tiktok_from_user(current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/social/unlink/meta", status_code=status.HTTP_204_NO_CONTENT)
+async def meta_social_unlink(
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    auth_service = AuthService(db)
+    try:
+        await auth_service.unlink_meta_from_user(current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/social/tiktok/login")
@@ -581,11 +758,23 @@ async def tiktok_oauth_callback(
         return redirect_with_error("Invalid or expired state")
 
     verifier = temp.get("code_verifier") or ""
+    link_user_id = temp.get("link_user_id")
     redirect_uri = f"{backend_url}/api/v1/auth/social/tiktok/callback"
     try:
         sub, email, name = await tiktok_exchange_and_profile(
             code=code, redirect_uri=redirect_uri, code_verifier=verifier
         )
+        if link_user_id:
+            result = await db.execute(select(User).where(User.id == str(link_user_id)))
+            target = result.scalar_one_or_none()
+            if not target:
+                return redirect_with_error("Your session expired. Sign in again and retry linking TikTok.")
+            try:
+                await auth_service.attach_tiktok_to_user(target, sub, name)
+            except ValueError as ve:
+                return redirect_with_error(str(ve))
+            app_token, expires_at, _ = await auth_service.issue_app_token(user=target)
+            return _redirect_with_app_token(frontend_base, app_token, expires_at, extra={"linked": "1"})
         user = await auth_service.get_or_create_user(platform_sub=sub, email=email, name=name)
         app_token, expires_at, _ = await auth_service.issue_app_token(user=user)
         return _redirect_with_app_token(frontend_base, app_token, expires_at)
@@ -643,8 +832,20 @@ async def meta_oauth_callback(
         return redirect_with_error("Invalid or expired state")
 
     redirect_uri = f"{backend_url}/api/v1/auth/social/meta/callback"
+    link_user_id = temp.get("link_user_id")
     try:
         sub, email, name = await meta_exchange_and_profile(code=code, redirect_uri=redirect_uri)
+        if link_user_id:
+            result = await db.execute(select(User).where(User.id == str(link_user_id)))
+            target = result.scalar_one_or_none()
+            if not target:
+                return redirect_with_error("Your session expired. Sign in again and retry linking Facebook.")
+            try:
+                await auth_service.attach_meta_to_user(target, sub, name)
+            except ValueError as ve:
+                return redirect_with_error(str(ve))
+            app_token, expires_at, _ = await auth_service.issue_app_token(user=target)
+            return _redirect_with_app_token(frontend_base, app_token, expires_at, extra={"linked": "1"})
         user = await auth_service.get_or_create_user(platform_sub=sub, email=email, name=name)
         app_token, expires_at, _ = await auth_service.issue_app_token(user=user)
         return _redirect_with_app_token(frontend_base, app_token, expires_at)
@@ -658,17 +859,123 @@ class LocalLoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+class MagicLinkRequest(BaseModel):
+    email: EmailStr
+
+
+class MagicLinkConsumeRequest(BaseModel):
+    token: str = Field(..., min_length=10, max_length=500)
+
+
+@router.post("/register", response_model=TokenExchangeResponse)
+async def register_email_password(payload: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    if not is_email_password_auth_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Email registration is disabled on this server",
+        )
+    auth_service = AuthService(db)
+    try:
+        user = await auth_service.register_with_password(payload.email, payload.password)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    app_token, _, _ = await auth_service.issue_app_token(user=user)
+    return TokenExchangeResponse(token=app_token)
+
+
+@router.post("/magic-link/request")
+async def magic_link_request(
+    payload: MagicLinkRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a one-time sign-in link if SMTP is configured and the account exists."""
+    if not is_magic_link_feature_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Magic link sign-in is not available",
+        )
+    em = payload.email.strip().lower()
+    auth_service = AuthService(db)
+    user = await auth_service.get_user_by_email_lower(em)
+
+    now = time.monotonic()
+    last = _magic_link_last_sent.get(em, 0.0)
+    if now - last < _MAGIC_LINK_COOLDOWN_SEC:
+        return {"sent": True}
+
+    if not user:
+        _magic_link_last_sent[em] = now
+        return {"sent": True}
+
+    await db.execute(delete(MagicLoginToken).where(MagicLoginToken.user_id == user.id))
+    await db.commit()
+
+    raw = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+    db.add(MagicLoginToken(token_hash=token_hash, user_id=user.id, expires_at=expires_at))
+    await db.commit()
+
+    _magic_link_last_sent[em] = now
+
+    frontend_base = get_frontend_redirect_base(request).rstrip("/")
+    sign_in_url = f"{frontend_base}/auth/magic-login?token={quote(raw, safe='')}"
+
+    await send_magic_login_email(user.email, sign_in_url)
+    return {"sent": True}
+
+
+@router.post("/magic-link/consume", response_model=TokenExchangeResponse)
+async def magic_link_consume(payload: MagicLinkConsumeRequest, db: AsyncSession = Depends(get_db)):
+    if not is_magic_link_feature_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Magic link sign-in is not available",
+        )
+    token_hash = hashlib.sha256(payload.token.strip().encode("utf-8")).hexdigest()
+    result = await db.execute(select(MagicLoginToken).where(MagicLoginToken.token_hash == token_hash))
+    row = result.scalar_one_or_none()
+    if not row or row.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired link")
+
+    user_result = await db.execute(select(User).where(User.id == row.user_id))
+    user = user_result.scalar_one_or_none()
+    await db.delete(row)
+    await db.commit()
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired link")
+
+    user.last_login = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(user)
+
+    auth_service = AuthService(db)
+    app_token, _, _ = await auth_service.issue_app_token(user=user)
+    return TokenExchangeResponse(token=app_token)
+
+
 @router.post("/local-login", response_model=TokenExchangeResponse)
 async def local_login(
     payload: LocalLoginRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    allow_password_auth = os.environ.get("ALLOW_PASSWORD_AUTH", "").lower() in ("1", "true", "yes")
-    if not allow_password_auth:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Password auth is disabled",
-        )
+    auth_service = AuthService(db)
+
+    if is_email_password_auth_enabled():
+        user = await auth_service.verify_email_password(payload.email, payload.password)
+        if user:
+            app_token, _, _ = await auth_service.issue_app_token(user=user)
+            return TokenExchangeResponse(token=app_token)
+
+    if not legacy_fixed_password_enabled():
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     expected_email = os.environ.get("LOCAL_LOGIN_EMAIL", "").strip().lower()
     expected_password = os.environ.get("LOCAL_LOGIN_PASSWORD", "")
@@ -682,7 +989,6 @@ async def local_login(
     if payload.email.strip().lower() != expected_email or payload.password != expected_password:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    auth_service = AuthService(db)
     user = await auth_service.get_or_create_user(
         platform_sub=os.environ.get("LOCAL_LOGIN_USER_ID", "owner-user"),
         email=expected_email,

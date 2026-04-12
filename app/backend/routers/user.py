@@ -1,7 +1,7 @@
 from typing import List, Optional
 
 from core.database import get_db
-from dependencies.auth import get_current_user, get_optional_current_user
+from dependencies.auth import _with_curated_badge, get_current_user, get_optional_current_user, user_row_to_response
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from models.auth import User
@@ -19,6 +19,7 @@ router = APIRouter(prefix="/api/v1/users", tags=["users"])
 class UpdateProfileRequest(BaseModel):
     name: Optional[str] = None
     nsfw_filter_enabled: Optional[bool] = None
+    instagram_handle: Optional[str] = None
 
 
 @router.get("/profile", response_model=UserResponse)
@@ -27,7 +28,8 @@ async def get_profile(db: AsyncSession = Depends(get_db), current_user: UserResp
     profile = await UserService.get_user_profile(db, current_user.id)
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found")
-    return profile
+    base = user_row_to_response(profile)
+    return await _with_curated_badge(base, db)
 
 
 @router.put("/profile", response_model=UserResponse)
@@ -37,21 +39,22 @@ async def update_profile(
     current_user: UserResponse = Depends(get_current_user),
 ):
     """Update current user profile"""
-    if profile_data.name is None and profile_data.nsfw_filter_enabled is None:
+    patch = profile_data.model_dump(exclude_unset=True)
+    if not patch:
         profile = await UserService.get_user_profile(db, current_user.id)
         if not profile:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found")
-        return profile
+        base = user_row_to_response(profile)
+        return await _with_curated_badge(base, db)
 
-    profile = await UserService.update_user_profile(
-        db,
-        current_user.id,
-        name=profile_data.name,
-        nsfw_filter_enabled=profile_data.nsfw_filter_enabled,
-    )
+    try:
+        profile = await UserService.update_user_profile(db, current_user.id, **patch)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found")
-    return profile
+    base = user_row_to_response(profile)
+    return await _with_curated_badge(base, db)
 
 
 class PublicUserBriefResponse(BaseModel):

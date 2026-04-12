@@ -6,6 +6,7 @@ export default function AuthCallback() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
+    const linked = params.get('linked');
     const errorMessage = params.get('msg');
 
     if (errorMessage) {
@@ -19,7 +20,7 @@ export default function AuthCallback() {
     }
 
     authApi.setStoredToken(token);
-    window.location.assign('/profile');
+    window.location.assign(linked === '1' ? '/profile?social_linked=1' : '/profile');
   }, []);
 
   return (

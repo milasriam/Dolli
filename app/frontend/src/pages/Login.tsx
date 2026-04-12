@@ -76,6 +76,10 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [magicEmail, setMagicEmail] = useState('');
+  const [magicLoading, setMagicLoading] = useState(false);
+  const [magicSent, setMagicSent] = useState(false);
+  const [magicError, setMagicError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -97,7 +101,11 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      await authApi.localLogin(email.trim(), password);
+      if (isRegister && opts?.email_signup) {
+        await authApi.register(email.trim(), password);
+      } else {
+        await authApi.localLogin(email.trim(), password);
+      }
       const profileOk = await refetch();
       if (!profileOk) {
         setError(t('auth.signedInNoProfile'));
@@ -122,6 +130,22 @@ export default function Login() {
 
   const anySocial =
     opts?.google_oidc || opts?.tiktok || opts?.meta_facebook || opts?.local_demo_redirect;
+  const anyMethod = Boolean(anySocial || opts?.password || opts?.magic_link);
+
+  const sendMagicLink = async () => {
+    setMagicError('');
+    setMagicSent(false);
+    setMagicLoading(true);
+    try {
+      await authApi.requestMagicLink(magicEmail.trim());
+      setMagicSent(true);
+    } catch (err: unknown) {
+      const ax = err as { message?: string };
+      setMagicError(ax?.message || t('auth.magicSendFailed'));
+    } finally {
+      setMagicLoading(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -145,7 +169,7 @@ export default function Login() {
           </div>
         ) : (
           <>
-            {!opts || (!anySocial && !opts.password) ? (
+            {!opts || !anyMethod ? (
               <p className="mb-4 text-sm text-amber-900 dark:text-amber-200/90">{t('auth.noMethods')}</p>
             ) : (
               <div className="space-y-3 mb-6">
@@ -184,7 +208,7 @@ export default function Login() {
               </div>
             )}
 
-            {opts?.password ? (
+            {opts?.password && (!isRegister || opts.email_signup) ? (
               <>
                 <div className="flex items-center gap-3 my-6">
                   <div className="h-px flex-1 bg-border" />
@@ -207,7 +231,19 @@ export default function Login() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    minLength={isRegister && opts.email_signup ? 8 : undefined}
+                    autoComplete={isRegister ? 'new-password' : 'current-password'}
                   />
+                  {!isRegister && opts?.password_reset ? (
+                    <div className="text-right -mt-1">
+                      <Link
+                        to="/auth/forgot-password"
+                        className="text-xs font-semibold text-violet-600 hover:text-violet-500 dark:text-violet-400 dark:hover:text-violet-300"
+                      >
+                        {t('auth.forgotPassword')}
+                      </Link>
+                    </div>
+                  ) : null}
                   {error ? <p className="text-red-400 text-sm">{error}</p> : null}
                   <button
                     type="submit"
@@ -218,6 +254,35 @@ export default function Login() {
                   </button>
                 </form>
               </>
+            ) : isRegister && !opts?.email_signup ? (
+              <p className="mt-4 text-sm text-muted-foreground">{t('auth.emailSignupDisabled')}</p>
+            ) : null}
+
+            {opts?.magic_link ? (
+              <div className="mt-6 rounded-xl border border-border bg-muted/40 p-4 space-y-3">
+                <p className="text-sm font-semibold text-foreground">{t('auth.magicLinkTitle')}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{t('auth.magicLinkHint')}</p>
+                <input
+                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground outline-none focus:border-violet-500"
+                  type="email"
+                  placeholder={t('auth.email')}
+                  value={magicEmail}
+                  onChange={(e) => setMagicEmail(e.target.value)}
+                  disabled={magicLoading}
+                />
+                {magicError ? <p className="text-xs text-red-400">{magicError}</p> : null}
+                {magicSent ? (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400">{t('auth.magicSent')}</p>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={magicLoading || !magicEmail.trim()}
+                  onClick={() => void sendMagicLink()}
+                  className="w-full rounded-lg bg-muted py-2.5 text-sm font-semibold text-foreground border border-border hover:bg-muted/80 disabled:opacity-50"
+                >
+                  {magicLoading ? t('auth.magicSending') : t('auth.magicSend')}
+                </button>
+              </div>
             ) : null}
 
             <p className="text-xs text-muted-foreground mt-6 text-center leading-relaxed">{t('auth.termsBlurb')}</p>

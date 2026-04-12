@@ -1,14 +1,19 @@
+import hashlib
 import logging
 import os
+import secrets
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 
 from core.auth import create_access_token
 from core.config import settings
 from core.database import db_manager
+from core.passwords import hash_password, verify_password
 from models.auth import OIDCState, User
-from sqlalchemy import delete, select
+from models.password_reset import PasswordResetToken
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -17,6 +22,51 @@ logger = logging.getLogger(__name__)
 class AuthService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def get_user_by_email_lower(self, email: str) -> Optional[User]:
+        em = email.strip().lower()
+        if not em:
+            return None
+        result = await self.db.execute(select(User).where(func.lower(User.email) == em))
+        return result.scalar_one_or_none()
+
+    async def register_with_password(self, email: str, password: str) -> User:
+        """Create a local email/password user. Raises ValueError for validation / duplicate email."""
+        em = email.strip().lower()
+        if len(password) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if len(password) > 128:
+            raise ValueError("Password is too long")
+        existing = await self.get_user_by_email_lower(em)
+        if existing:
+            raise ValueError("An account with this email already exists")
+        uid = f"local-{uuid.uuid4().hex}"
+        display = em.split("@", 1)[0] if "@" in em else em
+        user = User(
+            id=uid,
+            email=em,
+            name=display or None,
+            role="user",
+            last_login=datetime.now(timezone.utc),
+            password_hash=hash_password(password),
+        )
+        self.db.add(user)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
+
+    async def verify_email_password(self, email: str, password: str) -> Optional[User]:
+        """Return user if email matches a row with password_hash and password verifies."""
+        user = await self.get_user_by_email_lower(email)
+        if not user:
+            return None
+        ph = getattr(user, "password_hash", None)
+        if not ph or not verify_password(password, ph):
+            return None
+        user.last_login = datetime.now(timezone.utc)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
 
     async def get_or_create_user(self, platform_sub: str, email: str, name: Optional[str] = None) -> User:
         """Get existing user or create new one."""
@@ -79,14 +129,22 @@ class AuthService:
 
         return token, expires_at, claims
 
-    async def store_oidc_state(self, state: str, nonce: str, code_verifier: str):
-        """Store OIDC state in database."""
+    async def store_oidc_state(
+        self, state: str, nonce: str, code_verifier: str, link_user_id: Optional[str] = None
+    ):
+        """Store OIDC state in database. When link_user_id is set, OAuth completes as a social link for that user."""
         # Clean up expired states first
         await self.db.execute(delete(OIDCState).where(OIDCState.expires_at < datetime.now(timezone.utc)))
 
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)  # 10 minute expiry
 
-        oidc_state = OIDCState(state=state, nonce=nonce, code_verifier=code_verifier, expires_at=expires_at)
+        oidc_state = OIDCState(
+            state=state,
+            nonce=nonce,
+            code_verifier=code_verifier,
+            expires_at=expires_at,
+            link_user_id=link_user_id,
+        )
 
         self.db.add(oidc_state)
         await self.db.commit()
@@ -104,13 +162,160 @@ class AuthService:
             return None
 
         # Extract data before deleting
-        state_data = {"nonce": oidc_state.nonce, "code_verifier": oidc_state.code_verifier}
+        state_data = {
+            "nonce": oidc_state.nonce,
+            "code_verifier": oidc_state.code_verifier,
+            "link_user_id": getattr(oidc_state, "link_user_id", None),
+        }
 
         # Delete the used state (one-time use)
         await self.db.delete(oidc_state)
         await self.db.commit()
 
         return state_data
+
+    async def _tiktok_claimed_by_other(self, open_id: str, self_user_id: str) -> bool:
+        tok_id = f"tiktok:{open_id}"
+        r = await self.db.execute(
+            select(User.id)
+            .where(or_(User.id == tok_id, User.tiktok_linked_open_id == open_id), User.id != self_user_id)
+            .limit(1)
+        )
+        return r.scalar_one_or_none() is not None
+
+    async def attach_tiktok_to_user(self, user: User, platform_sub: str, display_name: str) -> None:
+        """Bind TikTok open_id to an existing user row. Raises ValueError on conflict or invalid sub."""
+        if not platform_sub.startswith("tiktok:"):
+            raise ValueError("Invalid TikTok account")
+        open_id = platform_sub[7:]
+        if not open_id:
+            raise ValueError("Invalid TikTok account")
+        if str(user.id) == platform_sub:
+            user.last_login = datetime.now(timezone.utc)
+            if display_name and display_name.strip():
+                user.name = display_name.strip()
+            await self.db.commit()
+            await self.db.refresh(user)
+            return
+        if await self._tiktok_claimed_by_other(open_id, str(user.id)):
+            raise ValueError("This TikTok account is already linked to another Dolli profile.")
+        user.tiktok_linked_open_id = open_id
+        user.tiktok_linked_display_name = (display_name or "").strip() or None
+        user.last_login = datetime.now(timezone.utc)
+        await self.db.commit()
+        await self.db.refresh(user)
+
+    async def _meta_claimed_by_other(self, fb_id: str, self_user_id: str) -> bool:
+        meta_id = f"meta:{fb_id}"
+        r = await self.db.execute(
+            select(User.id)
+            .where(or_(User.id == meta_id, User.meta_linked_user_id == fb_id), User.id != self_user_id)
+            .limit(1)
+        )
+        return r.scalar_one_or_none() is not None
+
+    async def attach_meta_to_user(self, user: User, platform_sub: str, display_name: str) -> None:
+        if not platform_sub.startswith("meta:"):
+            raise ValueError("Invalid Facebook account")
+        fb_id = platform_sub[5:]
+        if not fb_id:
+            raise ValueError("Invalid Facebook account")
+        if str(user.id) == platform_sub:
+            user.last_login = datetime.now(timezone.utc)
+            if display_name and display_name.strip():
+                user.name = display_name.strip()
+            await self.db.commit()
+            await self.db.refresh(user)
+            return
+        if await self._meta_claimed_by_other(fb_id, str(user.id)):
+            raise ValueError("This Facebook account is already linked to another Dolli profile.")
+        user.meta_linked_user_id = fb_id
+        user.meta_linked_display_name = (display_name or "").strip() or None
+        user.last_login = datetime.now(timezone.utc)
+        await self.db.commit()
+        await self.db.refresh(user)
+
+    async def unlink_tiktok_from_user(self, user_id: str) -> None:
+        result = await self.db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise ValueError("User not found")
+        if str(user.id).startswith("tiktok:"):
+            raise ValueError("This account was created with TikTok sign-in; TikTok cannot be disconnected here.")
+        user.tiktok_linked_open_id = None
+        user.tiktok_linked_display_name = None
+        await self.db.commit()
+        await self.db.refresh(user)
+
+    async def unlink_meta_from_user(self, user_id: str) -> None:
+        result = await self.db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise ValueError("User not found")
+        if str(user.id).startswith("meta:"):
+            raise ValueError("This account was created with Facebook sign-in; Facebook cannot be disconnected here.")
+        user.meta_linked_user_id = None
+        user.meta_linked_display_name = None
+        await self.db.commit()
+        await self.db.refresh(user)
+
+    async def change_password(self, user_id: str, current_password: str, new_password: str) -> None:
+        if len(new_password) < 8:
+            raise ValueError("New password must be at least 8 characters")
+        if len(new_password) > 128:
+            raise ValueError("New password is too long")
+        result = await self.db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise ValueError("User not found")
+        ph = getattr(user, "password_hash", None)
+        if not ph:
+            raise ValueError("Password sign-in is not enabled for this account")
+        if not verify_password(current_password, ph):
+            raise ValueError("Current password is incorrect")
+        user.password_hash = hash_password(new_password)
+        await self.db.commit()
+
+    async def reset_password_with_token(self, token: str, new_password: str) -> User:
+        if len(new_password) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if len(new_password) > 128:
+            raise ValueError("Password is too long")
+        raw = (token or "").strip()
+        if len(raw) < 10:
+            raise ValueError("Invalid or expired reset link")
+        token_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        result = await self.db.execute(select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash))
+        row = result.scalar_one_or_none()
+        if not row or row.expires_at < datetime.now(timezone.utc):
+            if row:
+                await self.db.delete(row)
+                await self.db.commit()
+            raise ValueError("Invalid or expired reset link")
+        ures = await self.db.execute(select(User).where(User.id == row.user_id))
+        user = ures.scalar_one_or_none()
+        await self.db.delete(row)
+        if not user:
+            await self.db.commit()
+            raise ValueError("Invalid or expired reset link")
+        user.password_hash = hash_password(new_password)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
+
+    async def create_password_reset_token_raw(self, user_id: str) -> Optional[str]:
+        """Create a one-time reset token for a user with a password. Returns raw token for email."""
+        result = await self.db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user or not getattr(user, "password_hash", None):
+            return None
+        await self.db.execute(delete(PasswordResetToken).where(PasswordResetToken.user_id == user_id))
+        raw = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+        self.db.add(PasswordResetToken(token_hash=token_hash, user_id=user_id, expires_at=expires_at))
+        await self.db.commit()
+        return raw
 
 
 async def initialize_admin_user():

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { client } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
-import { authApi } from '@/lib/auth';
+import { authApi, fetchLoginOptions, type LoginOptions } from '@/lib/auth';
 import { fetchEarlyDonorMilestone, type EarlyDonorMilestone } from '@/lib/earlyDonorMilestone';
 import { fetchMyFriends, type FriendBrief } from '@/lib/friends';
 import { fetchFollowStats, fetchMyFollowing, type FollowStats, type FollowingBrief } from '@/lib/follows';
@@ -14,7 +15,7 @@ import { toast } from 'sonner';
 import {
   Heart, Trophy, Flame, Share2, TrendingUp, User, HeartHandshake, UserPlus, Megaphone,
   Copy, CheckCircle2, Pencil, Check, X,
-  Zap, Users, Gift, Sparkles,
+  Zap, Users, Gift, Sparkles, Lock, Facebook,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -120,6 +121,7 @@ const INSTAGRAM_ICON = (
 );
 
 export default function Profile() {
+  const { t } = useTranslation();
   const { user: authUser, loading: authLoading, refetch } = useAuth();
   const [donations, setDonations] = useState<Donation[]>([]);
   const [badges, setBadges] = useState<Badge[]>([]);
@@ -136,9 +138,38 @@ export default function Profile() {
   const [followStats, setFollowStats] = useState<FollowStats | null>(null);
   const [followingPeople, setFollowingPeople] = useState<FollowingBrief[]>([]);
   const [friendsPeople, setFriendsPeople] = useState<FriendBrief[]>([]);
+  const [acctOpts, setAcctOpts] = useState<LoginOptions | null>(null);
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwNew2, setPwNew2] = useState('');
+  const [pwBusy, setPwBusy] = useState(false);
+  const [igDraft, setIgDraft] = useState('');
+  const [igBusy, setIgBusy] = useState(false);
 
   const user = USE_MOCK_DATA ? MOCK_USER : authUser;
   const isLoading = USE_MOCK_DATA ? false : (authLoading || loading);
+
+  useEffect(() => {
+    void fetchLoginOptions().then(setAcctOpts);
+  }, []);
+
+  useEffect(() => {
+    if (authUser?.instagram_handle !== undefined) {
+      setIgDraft(authUser.instagram_handle || '');
+    }
+  }, [authUser?.instagram_handle, authUser?.id]);
+
+  useEffect(() => {
+    if (USE_MOCK_DATA) return;
+    const u = new URLSearchParams(window.location.search);
+    if (u.get('social_linked') !== '1') return;
+    if (!authApi.getStoredToken()) return;
+    window.history.replaceState({}, '', '/profile');
+    void (async () => {
+      await refetch();
+      toast.success(t('profileAccount.socialLinkedToast'));
+    })();
+  }, [refetch, t]);
 
   useEffect(() => {
     if (USE_MOCK_DATA) {
@@ -633,6 +664,262 @@ export default function Profile() {
               </div>
             </div>
           </div>
+        )}
+
+        {!USE_MOCK_DATA && authUser && (
+          <section
+            className="mb-6 space-y-5 rounded-2xl border border-border bg-card p-5 sm:p-6"
+            aria-labelledby="account-security-heading"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-violet-200">
+                <Lock className="h-5 w-5" aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 id="account-security-heading" className="text-sm font-bold text-foreground">
+                  {t('profileAccount.title')}
+                </h2>
+                <p className="mt-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('profileAccount.emailLabel')}
+                </p>
+                <p className="mt-0.5 break-all text-sm text-foreground">{authUser.email}</p>
+                {authUser.email?.includes('@users.dolli.internal') ? (
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                    {t('profileAccount.emailSyntheticHint')}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            {authUser.has_password ? (
+              <form
+                className="space-y-3 border-t border-border pt-5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void (async () => {
+                    if (pwNew !== pwNew2) {
+                      toast.error(t('profileAccount.passwordMismatch'));
+                      return;
+                    }
+                    setPwBusy(true);
+                    try {
+                      await authApi.changePassword(pwCurrent, pwNew);
+                      setPwCurrent('');
+                      setPwNew('');
+                      setPwNew2('');
+                      await refetch();
+                      toast.success(t('profileAccount.passwordUpdated'));
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : 'Error');
+                    } finally {
+                      setPwBusy(false);
+                    }
+                  })();
+                }}
+              >
+                <p className="text-xs font-semibold text-foreground">{t('profileAccount.changePasswordTitle')}</p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <Input
+                    type="password"
+                    autoComplete="current-password"
+                    placeholder={t('profileAccount.currentPassword')}
+                    value={pwCurrent}
+                    onChange={(e) => setPwCurrent(e.target.value)}
+                    className="h-10 border-border bg-muted/60 text-foreground sm:col-span-1"
+                  />
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={t('profileAccount.newPassword')}
+                    value={pwNew}
+                    onChange={(e) => setPwNew(e.target.value)}
+                    className="h-10 border-border bg-muted/60 text-foreground sm:col-span-1"
+                  />
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={t('profileAccount.confirmPassword')}
+                    value={pwNew2}
+                    onChange={(e) => setPwNew2(e.target.value)}
+                    className="h-10 border-border bg-muted/60 text-foreground sm:col-span-1"
+                  />
+                </div>
+                <Button type="submit" size="sm" disabled={pwBusy} className="rounded-xl">
+                  {t('profileAccount.savePassword')}
+                </Button>
+              </form>
+            ) : null}
+
+            <div className="space-y-4 border-t border-border pt-5">
+              <div>
+                <p className="text-xs font-semibold text-foreground">{t('profileAccount.socialTitle')}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t('profileAccount.socialIntro')}</p>
+              </div>
+
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    {TIKTOK_ICON}
+                    {t('profileAccount.tiktok')}
+                  </span>
+                  {authUser.tiktok_primary_login ? (
+                    <span className="text-xs text-muted-foreground">
+                      {t('profileAccount.signedInWith', { provider: t('profileAccount.tiktok') })}
+                    </span>
+                  ) : authUser.tiktok_connected ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                        {t('profileAccount.linkedAs', {
+                          name: authUser.tiktok_display_name || 'TikTok',
+                        })}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-lg text-xs"
+                        onClick={() =>
+                          void (async () => {
+                            try {
+                              await authApi.unlinkTikTok();
+                              await refetch();
+                              toast.success(t('profileAccount.unlinkDone'));
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : 'Error');
+                            }
+                          })()
+                        }
+                      >
+                        {t('profileAccount.unlink')}
+                      </Button>
+                    </div>
+                  ) : acctOpts?.tiktok ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 rounded-lg bg-foreground/10 text-xs text-foreground hover:bg-foreground/15"
+                      onClick={() =>
+                        void (async () => {
+                          try {
+                            toast.info(t('profileAccount.linking'));
+                            await authApi.startSocialLinkTikTok();
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : 'Error');
+                          }
+                        })()
+                      }
+                    >
+                      {t('profileAccount.connect')}
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">{t('profileAccount.configureServer')}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Facebook className="h-4 w-4 text-sky-300" aria-hidden />
+                    {t('profileAccount.facebook')}
+                  </span>
+                  {authUser.meta_primary_login ? (
+                    <span className="text-xs text-muted-foreground">
+                      {t('profileAccount.signedInWith', { provider: t('profileAccount.facebook') })}
+                    </span>
+                  ) : authUser.meta_connected ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                        {t('profileAccount.linkedAs', {
+                          name: authUser.meta_display_name || 'Facebook',
+                        })}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-lg text-xs"
+                        onClick={() =>
+                          void (async () => {
+                            try {
+                              await authApi.unlinkMeta();
+                              await refetch();
+                              toast.success(t('profileAccount.unlinkDone'));
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : 'Error');
+                            }
+                          })()
+                        }
+                      >
+                        {t('profileAccount.unlink')}
+                      </Button>
+                    </div>
+                  ) : acctOpts?.meta_facebook ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 rounded-lg bg-foreground/10 text-xs text-foreground hover:bg-foreground/15"
+                      onClick={() =>
+                        void (async () => {
+                          try {
+                            toast.info(t('profileAccount.linking'));
+                            await authApi.startSocialLinkMeta();
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : 'Error');
+                          }
+                        })()
+                      }
+                    >
+                      {t('profileAccount.connect')}
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">{t('profileAccount.configureServer')}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2">
+                <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  {INSTAGRAM_ICON}
+                  {t('profileAccount.instagramHandle')}
+                </span>
+                <p className="text-xs text-muted-foreground">{t('profileAccount.instagramHint')}</p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Input
+                    value={igDraft}
+                    onChange={(e) => setIgDraft(e.target.value)}
+                    placeholder="username"
+                    maxLength={120}
+                    className="h-10 border-border bg-muted/60 text-foreground sm:max-w-xs"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="rounded-xl sm:w-auto"
+                    disabled={igBusy}
+                    onClick={() =>
+                      void (async () => {
+                        setIgBusy(true);
+                        try {
+                          await authApi.updateProfile({
+                            instagram_handle: igDraft.trim() || null,
+                          });
+                          await refetch();
+                          toast.success(t('profileAccount.instagramSaved'));
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : 'Error');
+                        } finally {
+                          setIgBusy(false);
+                        }
+                      })()
+                    }
+                  >
+                    {t('profileAccount.saveHandle')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </section>
         )}
 
         {!USE_MOCK_DATA && (

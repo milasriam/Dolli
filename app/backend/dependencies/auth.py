@@ -29,7 +29,29 @@ async def get_bearer_token(
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication credentials were not provided")
 
 
-def _row_to_user_response(row: UserRow) -> UserResponse:
+def user_row_to_response(row: UserRow) -> UserResponse:
+    uid = str(row.id)
+    ph = getattr(row, "password_hash", None)
+    tt_open = getattr(row, "tiktok_linked_open_id", None)
+    tt_disp_col = getattr(row, "tiktok_linked_display_name", None)
+    meta_uid = getattr(row, "meta_linked_user_id", None)
+    meta_disp_col = getattr(row, "meta_linked_display_name", None)
+    tiktok_primary = uid.startswith("tiktok:")
+    meta_primary = uid.startswith("meta:")
+    tiktok_connected = tiktok_primary or bool(tt_open)
+    meta_connected = meta_primary or bool(meta_uid)
+    tiktok_display_name: Optional[str] = None
+    if uid.startswith("tiktok:"):
+        tiktok_display_name = (row.name or "").strip() or None
+    elif tt_disp_col:
+        tiktok_display_name = (tt_disp_col or "").strip() or None
+    meta_display_name: Optional[str] = None
+    if uid.startswith("meta:"):
+        meta_display_name = (row.name or "").strip() or None
+    elif meta_disp_col:
+        meta_display_name = (meta_disp_col or "").strip() or None
+    raw_ig = getattr(row, "instagram_handle", None)
+    instagram_handle = (raw_ig.strip() or None) if isinstance(raw_ig, str) else None
     return UserResponse(
         id=row.id,
         email=row.email or "",
@@ -41,7 +63,17 @@ def _row_to_user_response(row: UserRow) -> UserResponse:
         organization_display_name=getattr(row, "organization_display_name", None),
         platform_fee_bps=getattr(row, "platform_fee_bps", None),
         nsfw_filter_enabled=bool(getattr(row, "nsfw_filter_enabled", True)),
+        has_password=bool(ph),
+        tiktok_connected=tiktok_connected,
+        tiktok_display_name=tiktok_display_name,
+        meta_connected=meta_connected,
+        meta_display_name=meta_display_name,
+        instagram_handle=instagram_handle,
     )
+
+
+def _row_to_user_response(row: UserRow) -> UserResponse:
+    return user_row_to_response(row)
 
 
 async def _with_curated_badge(user: UserResponse, db: AsyncSession) -> UserResponse:
@@ -96,6 +128,14 @@ def _jwt_fallback_user(uid: str, payload: dict) -> UserResponse:
         organization_display_name=payload.get("organization_display_name"),
         platform_fee_bps=fee_bps,
         nsfw_filter_enabled=nsfw_filter_enabled,
+        has_password=False,
+        tiktok_connected=str(uid).startswith("tiktok:"),
+        tiktok_primary_login=str(uid).startswith("tiktok:"),
+        tiktok_display_name=None,
+        meta_connected=str(uid).startswith("meta:"),
+        meta_primary_login=str(uid).startswith("meta:"),
+        meta_display_name=None,
+        instagram_handle=None,
     )
 
 

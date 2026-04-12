@@ -8,6 +8,9 @@ import Index from './pages/Index';
 import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
 import AuthError from './pages/AuthError';
+import MagicLinkLogin from './pages/MagicLinkLogin';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import CampaignDetail from './pages/CampaignDetail';
 import DonationSuccess from './pages/DonationSuccess';
 import Explore from './pages/Explore';
@@ -35,6 +38,9 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Login />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/auth/magic-login" element={<MagicLinkLogin />} />
+              <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+              <Route path="/auth/reset-password" element={<ResetPassword />} />
               <Route path="/auth/error" element={<AuthError />} />
               <Route path="/campaign/:id/edit" element={<CreateCampaign />} />
               <Route path="/campaign/:id" element={<CampaignDetail />} />
