@@ -44,8 +44,12 @@ from schemas.auth import (
     UserNotificationResponse,
     UserResponse,
 )
-from services.auth import AuthService
-from services.notify_email import send_magic_login_email, send_password_reset_email
+from services.auth import AuthService, as_utc_aware
+from services.notify_email import (
+    send_magic_login_email,
+    send_password_reset_email,
+    smtp_delivery_configured,
+)
 from services.donations import DonationsService
 from services.user_notifications import UserNotificationsService
 from services.social_login import (
@@ -130,13 +134,13 @@ def is_email_password_auth_enabled() -> bool:
 def is_magic_link_feature_enabled() -> bool:
     if os.environ.get("ALLOW_MAGIC_LINK", "").lower() not in ("1", "true", "yes"):
         return False
-    return bool((os.environ.get("SMTP_HOST") or "").strip())
+    return smtp_delivery_configured()
 
 
 def is_password_reset_feature_enabled() -> bool:
     if os.environ.get("ALLOW_PASSWORD_RESET", "").lower() not in ("1", "true", "yes"):
         return False
-    return bool((os.environ.get("SMTP_HOST") or "").strip())
+    return smtp_delivery_configured()
 
 
 def legacy_fixed_password_enabled() -> bool:
@@ -372,7 +376,9 @@ async def callback(
         app_token, expires_at, _ = await auth_service.issue_app_token(user=user)
 
         logger.info("[callback] OIDC callback successful, redirecting to frontend auth/callback")
-        return _redirect_with_app_token(frontend_base, app_token, expires_at)
+        return _redirect_with_app_token(
+            frontend_base, app_token, expires_at, extra={"oidc_session": "1"}
+        )
 
     except IDTokenValidationError as e:
         # Redirect to error page with validation details
@@ -941,7 +947,8 @@ async def magic_link_consume(payload: MagicLinkConsumeRequest, db: AsyncSession 
     token_hash = hashlib.sha256(payload.token.strip().encode("utf-8")).hexdigest()
     result = await db.execute(select(MagicLoginToken).where(MagicLoginToken.token_hash == token_hash))
     row = result.scalar_one_or_none()
-    if not row or row.expires_at < datetime.now(timezone.utc):
+    now = datetime.now(timezone.utc)
+    if not row or as_utc_aware(row.expires_at) < now:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired link")
 
     user_result = await db.execute(select(User).where(User.id == row.user_id))
@@ -973,6 +980,17 @@ async def local_login(
         if user:
             app_token, _, _ = await auth_service.issue_app_token(user=user)
             return TokenExchangeResponse(token=app_token)
+
+        em = payload.email.strip().lower()
+        maybe = await auth_service.get_user_by_email_lower(em)
+        if maybe and not getattr(maybe, "password_hash", None):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "This email is registered with Google sign-in. Use Continue with Google, "
+                    "or set a Dolli password first via Forgot password on the sign-in page."
+                ),
+            )
 
     if not legacy_fixed_password_enabled():
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")

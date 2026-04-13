@@ -11,6 +11,7 @@ import {
   BarChart3,
   Compass,
   LogOut,
+  Lock,
   Bell,
   HeartHandshake,
   ChevronDown,
@@ -218,6 +219,17 @@ export default function Header() {
                         {t('nav.profile')}
                       </Link>
                     </DropdownMenuItem>
+                    {user.has_password ? (
+                      <DropdownMenuItem
+                        asChild
+                        className="cursor-pointer rounded-lg focus:bg-muted focus:text-foreground"
+                      >
+                        <Link to="/profile#account-security" className="flex items-center gap-2">
+                          <Lock className="h-4 w-4 opacity-70" aria-hidden />
+                          {t('nav.changePassword')}
+                        </Link>
+                      </DropdownMenuItem>
+                    ) : null}
                     {isAdmin && (
                       <DropdownMenuItem
                         asChild
@@ -320,6 +332,15 @@ export default function Header() {
                 <Link to="/profile" onClick={closeMobile} className={mobileRowClass()}>
                   {t('nav.profile')}
                 </Link>
+                {user.has_password ? (
+                  <Link
+                    to="/profile#account-security"
+                    onClick={closeMobile}
+                    className={mobileRowClass()}
+                  >
+                    {t('nav.changePassword')}
+                  </Link>
+                ) : null}
                 {isAdmin && (
                   <Link to="/admin" onClick={closeMobile} className={mobileRowClass()}>
                     {t('nav.analytics')}

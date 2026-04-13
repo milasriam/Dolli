@@ -3,6 +3,48 @@ import { refreshWebSdkClient } from './api';
 import { getAPIBaseURL } from './config';
 
 const AUTH_TOKEN_KEY = 'dolli_auth_token';
+/** Set when the user finished Google OIDC in this browser; used to choose federated logout. */
+const OIDC_BROWSER_SESSION_KEY = 'dolli_oidc_browser_session';
+
+function clearOidcBrowserSessionMarker(): void {
+  try {
+    window.localStorage.removeItem(OIDC_BROWSER_SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function hasOidcBrowserSessionMarker(): boolean {
+  try {
+    return window.localStorage.getItem(OIDC_BROWSER_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** FastAPI: `detail` is a string (HTTPException) or a list of validation errors `{ msg, ... }`. */
+function messageFromFastApiBody(data: unknown, fallback: string, httpStatus: number): string {
+  if (!data || typeof data !== 'object') {
+    return httpStatus ? `${fallback} (HTTP ${httpStatus})` : fallback;
+  }
+  const detail = (data as { detail?: unknown }).detail;
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail.trim();
+  }
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((item) => {
+        if (item && typeof item === 'object' && 'msg' in item) {
+          const m = (item as { msg?: unknown }).msg;
+          return typeof m === 'string' ? m.trim() : '';
+        }
+        return '';
+      })
+      .filter(Boolean);
+    if (msgs.length) return msgs.join(' ');
+  }
+  return httpStatus ? `${fallback} (HTTP ${httpStatus})` : fallback;
+}
 
 export type LoginOptions = {
   google_oidc: boolean;
@@ -69,6 +111,26 @@ class RPApi {
     window.localStorage.removeItem(AUTH_TOKEN_KEY);
     window.localStorage.removeItem('token');
     refreshWebSdkClient();
+  }
+
+  /**
+   * Google OIDC redirects with `oidc_session=1`; TikTok/Meta/local demo do not.
+   * Keeps a marker so logout can end the Google browser session only when relevant.
+   */
+  applyAuthCallbackQuery(searchParams: URLSearchParams): void {
+    if (searchParams.get('oidc_session') === '1') {
+      try {
+        window.localStorage.setItem(OIDC_BROWSER_SESSION_KEY, '1');
+      } catch {
+        /* ignore */
+      }
+    } else {
+      clearOidcBrowserSessionMarker();
+    }
+  }
+
+  clearFederatedLogoutMarker(): void {
+    clearOidcBrowserSessionMarker();
   }
 
   async getCurrentUser() {
@@ -158,6 +220,7 @@ class RPApi {
     }
     const token = data?.token;
     if (!token) throw new Error('Login token is missing');
+    clearOidcBrowserSessionMarker();
     this.setStoredToken(token);
     return data;
   }
@@ -191,6 +254,7 @@ class RPApi {
     }
     const t = data?.token;
     if (!t) throw new Error('Login token is missing');
+    clearOidcBrowserSessionMarker();
     this.setStoredToken(t);
     return data;
   }
@@ -228,6 +292,7 @@ class RPApi {
 
     const token = data?.token;
     if (!token) throw new Error('Login token is missing');
+    clearOidcBrowserSessionMarker();
     this.setStoredToken(token);
     return data;
   }
@@ -330,28 +395,51 @@ class RPApi {
   }
 
   async resetPasswordWithToken(token: string, password: string): Promise<void> {
-    const res = await fetch(`${this.getBaseURL()}/api/v1/auth/reset-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: token.trim(), password }),
-      credentials: 'omit',
-    });
-    const data = (await res.json().catch(() => ({}))) as { token?: string; detail?: string };
+    const url = `${this.getBaseURL()}/api/v1/auth/reset-password`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token.trim(), password }),
+        credentials: 'omit',
+      });
+    } catch {
+      const err = new Error('Network Error') as Error & { code?: string };
+      err.code = 'ERR_NETWORK';
+      throw err;
+    }
+    const raw = await res.text().catch(() => '');
+    let data: { token?: string } & Record<string, unknown> = {};
+    try {
+      if (raw) data = JSON.parse(raw) as typeof data;
+    } catch {
+      data = {};
+    }
     if (!res.ok) {
-      throw new Error(typeof data.detail === 'string' ? data.detail : 'Could not reset password');
+      throw new Error(messageFromFastApiBody(data, 'Could not reset password', res.status));
     }
     const t = data?.token;
     if (!t) throw new Error('Login token is missing');
+    clearOidcBrowserSessionMarker();
     this.setStoredToken(t);
   }
 
   async logout() {
+    const needsGoogleSessionLogout = hasOidcBrowserSessionMarker();
+    if (!needsGoogleSessionLogout) {
+      this.clearStoredToken();
+      clearOidcBrowserSessionMarker();
+      window.location.assign('/');
+      return;
+    }
     try {
       const response = await this.client.get(`${this.getBaseURL()}/api/v1/auth/logout`);
       this.clearStoredToken();
       window.location.assign(response.data.redirect_url || '/');
-    } catch (error: any) {
+    } catch {
       this.clearStoredToken();
+      clearOidcBrowserSessionMarker();
       window.location.assign('/');
     }
   }

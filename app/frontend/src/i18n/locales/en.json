@@ -27,7 +27,8 @@
     "actions": "Actions",
     "account": "Account",
     "analytics": "Analytics",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "changePassword": "Change password"
   },
   "header": {
     "account": "Account",
@@ -108,6 +109,7 @@
     "title": "Account & security",
     "emailLabel": "Email",
     "emailSyntheticHint": "Some social sign-ins use an internal placeholder address on Dolli. You can still set a password or link more accounts below.",
+    "noPasswordHint": "The change-password form appears once your Dolli account has a password. If you only use Google or another social provider, open the sign-in page and use “Forgot password?” with your email to set one first — then the form will show up here.",
     "changePasswordTitle": "Change password",
     "currentPassword": "Current password",
     "newPassword": "New password",

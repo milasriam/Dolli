@@ -21,14 +21,13 @@ function inferApiBaseURLFromHost(): string {
 
   const { protocol, hostname } = window.location;
 
-  // Prod SPA → separate API host (CORS configured on api.dolli.space).
-  if (hostname === 'dolli.space' || hostname === 'www.dolli.space') {
-    return `${protocol}//api.dolli.space`;
-  }
-
-  // Staging: same origin — nginx must proxy /api/ → dolli-backend-staging (see deploy/nginx/).
-  // Avoids WebKit/Safari cross-subdomain TLS/HTTP2 issues to api-staging.dolli.space.
-  if (hostname === 'staging.dolli.space') {
+  // Prod + staging: same origin — nginx proxies /api/ to the backend (see deploy/nginx/).
+  // Avoids cross-subdomain CORS and WebKit/Safari TLS/HTTP2 quirks to api*.dolli.space.
+  if (
+    hostname === 'dolli.space' ||
+    hostname === 'www.dolli.space' ||
+    hostname === 'staging.dolli.space'
+  ) {
     return `${protocol}//${hostname}`;
   }
 

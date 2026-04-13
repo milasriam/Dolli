@@ -19,6 +19,7 @@ export default function AuthCallback() {
       return;
     }
 
+    authApi.applyAuthCallbackQuery(params);
     authApi.setStoredToken(token);
     window.location.assign(linked === '1' ? '/profile?social_linked=1' : '/profile');
   }, []);

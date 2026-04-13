@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { client } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -122,6 +122,7 @@ const INSTAGRAM_ICON = (
 
 export default function Profile() {
   const { t } = useTranslation();
+  const location = useLocation();
   const { user: authUser, loading: authLoading, refetch } = useAuth();
   const [donations, setDonations] = useState<Donation[]>([]);
   const [badges, setBadges] = useState<Badge[]>([]);
@@ -170,6 +171,15 @@ export default function Profile() {
       toast.success(t('profileAccount.socialLinkedToast'));
     })();
   }, [refetch, t]);
+
+  useEffect(() => {
+    if (location.hash !== '#account-security') return;
+    if (!authUser) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById('account-security')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [location.pathname, location.hash, authUser?.id]);
 
   useEffect(() => {
     if (USE_MOCK_DATA) {
@@ -668,7 +678,8 @@ export default function Profile() {
 
         {!USE_MOCK_DATA && authUser && (
           <section
-            className="mb-6 space-y-5 rounded-2xl border border-border bg-card p-5 sm:p-6"
+            id="account-security"
+            className="mb-6 space-y-5 scroll-mt-24 rounded-2xl border border-border bg-card p-5 sm:p-6"
             aria-labelledby="account-security-heading"
           >
             <div className="flex items-start gap-3">
@@ -686,6 +697,11 @@ export default function Profile() {
                 {authUser.email?.includes('@users.dolli.internal') ? (
                   <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
                     {t('profileAccount.emailSyntheticHint')}
+                  </p>
+                ) : null}
+                {!authUser.has_password ? (
+                  <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                    {t('profileAccount.noPasswordHint')}
                   </p>
                 ) : null}
               </div>

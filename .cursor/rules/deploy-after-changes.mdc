@@ -5,17 +5,14 @@ alwaysApply: true
 
 # Deploy after substantive changes
 
-When you change code that affects **staging or production** (backend, frontend, `scripts/deploy.sh`, nginx-related docs are not enough — only if user edits server config in repo), do **one** of the following before ending the turn:
+When you change code that affects **staging or production** (backend, frontend, `scripts/deploy.sh`; nginx on the VPS must match `deploy/nginx/` when that file changed), do **one** of the following before ending the turn:
 
-1. **Run deploy** from repo root (preferred when network/SSH is available and the user did not say to skip deploy):
+1. **Run deploy** from repo root (preferred when network/SSH works and the user did not say to skip deploy):
    - Staging: `./scripts/deploy.sh staging`
    - Production: `./scripts/deploy.sh prod`
-   Use `required_permissions: ["network"]` or `["all"]` if the sandbox blocks SSH/rsync.
+   Use `required_permissions: ["network"]` or `["all"]` if the sandbox blocks SSH/rsync. Retry or widen permissions once if the first attempt failed for sandbox reasons.
 
-2. If deploy cannot be run (no network, SSH failure, ambiguous target env), **give explicit copy-paste instructions** in the same message:
-   - `cd` to project root
-   - exact `./scripts/deploy.sh staging` or `prod`
-   - note that **git push alone does not deploy**; the script pushes to the VPS.
+2. If deploy **still** cannot run after trying, state **what failed** (e.g. SSH permission denied, missing key). Ask the user **only** for what blocks you (e.g. mount SSH key, approve `all` permissions). Do **not** replace (1) with a generic “please run deploy yourself” handoff — see `agent-execution.mdc`.
 
 Default to **staging** when the work was clearly staging/auth/CORS unless the user asked for prod.
 

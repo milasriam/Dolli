@@ -19,6 +19,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 
+def as_utc_aware(dt: datetime) -> datetime:
+    """Normalize ORM datetimes to UTC-aware for comparisons.
+
+    Some drivers (e.g. MySQL) return naive datetimes for TIMESTAMP columns; comparing them
+    to ``datetime.now(timezone.utc)`` raises TypeError and becomes HTTP 500.
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 class AuthService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -27,8 +38,17 @@ class AuthService:
         em = email.strip().lower()
         if not em:
             return None
-        result = await self.db.execute(select(User).where(func.lower(User.email) == em))
-        return result.scalar_one_or_none()
+        # Same email can exist on a legacy local row and a Google row; avoid MultipleResultsFound.
+        result = await self.db.execute(
+            select(User)
+            .where(func.lower(User.email) == em)
+            .order_by(
+                (User.password_hash.isnot(None)).desc(),
+                User.last_login.desc().nullslast(),
+            )
+            .limit(1)
+        )
+        return result.scalars().first()
 
     async def register_with_password(self, email: str, password: str) -> User:
         """Create a local email/password user. Raises ValueError for validation / duplicate email."""
@@ -123,7 +143,10 @@ class AuthService:
             claims["organization_display_name"] = on
         fee = getattr(user, "platform_fee_bps", None)
         if fee is not None:
-            claims["platform_fee_bps"] = int(fee)
+            try:
+                claims["platform_fee_bps"] = int(fee)
+            except (TypeError, ValueError):
+                pass
         claims["nsfw_filter_enabled"] = bool(getattr(user, "nsfw_filter_enabled", True))
         token = create_access_token(claims, expires_minutes=expires_minutes)
 
@@ -287,7 +310,8 @@ class AuthService:
         token_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
         result = await self.db.execute(select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash))
         row = result.scalar_one_or_none()
-        if not row or row.expires_at < datetime.now(timezone.utc):
+        now = datetime.now(timezone.utc)
+        if not row or as_utc_aware(row.expires_at) < now:
             if row:
                 await self.db.delete(row)
                 await self.db.commit()
@@ -304,10 +328,10 @@ class AuthService:
         return user
 
     async def create_password_reset_token_raw(self, user_id: str) -> Optional[str]:
-        """Create a one-time reset token for a user with a password. Returns raw token for email."""
+        """Create a one-time reset token. Works for OAuth-only users (no password_hash) so they can add a password."""
         result = await self.db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
-        if not user or not getattr(user, "password_hash", None):
+        if not user:
             return None
         await self.db.execute(delete(PasswordResetToken).where(PasswordResetToken.user_id == user_id))
         raw = secrets.token_urlsafe(32)

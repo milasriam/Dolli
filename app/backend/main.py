@@ -104,30 +104,50 @@ def _merge_origins_unique(base: list[str], extras: list[str]) -> list[str]:
     return out
 
 
-def _build_allowed_origins() -> list[str]:
-    explicit_origins = _parse_csv_env("ALLOWED_ORIGINS")
-    if explicit_origins:
-        # Operator-defined list only — no automatic mixing of staging/prod.
-        return explicit_origins
+def _cors_candidate_netloc(raw: str) -> str:
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    return (urlparse(raw if "://" in raw else f"https://{raw}").netloc or "").lower()
 
+
+def _is_dolli_prod_public_spa_netloc(netloc: str) -> bool:
+    """apex or www — both must be CORS-allowed; users and SEO often land on www."""
+    return netloc in ("dolli.space", "www.dolli.space")
+
+
+def _should_merge_dolli_prod_spa_cors(origins: list[str]) -> bool:
+    for o in origins:
+        if _is_dolli_prod_public_spa_netloc(_cors_candidate_netloc(o)):
+            return True
+    for key in ("FRONTEND_URL", "VITE_FRONTEND_URL"):
+        if _is_dolli_prod_public_spa_netloc(_cors_candidate_netloc(os.environ.get(key, ""))):
+            return True
+    return False
+
+
+def _build_allowed_origins() -> list[str]:
+    """Merge explicit ALLOWED_ORIGINS with FRONTEND_URL / ALLOWED_DOMAINS / channel defaults.
+
+    A non-empty ALLOWED_ORIGINS alone used to replace all other sources, which broke prod when
+    operators omitted https://dolli.space while listing only the API host or a single typo entry.
+    """
     origins: list[str] = []
+    origins = _merge_origins_unique(origins, _parse_csv_env("ALLOWED_ORIGINS"))
 
     for candidate in (
         os.environ.get("FRONTEND_URL", ""),
         os.environ.get("VITE_FRONTEND_URL", ""),
     ):
-        if candidate and candidate not in origins:
-            origins.append(candidate.rstrip("/"))
+        if candidate:
+            origins = _merge_origins_unique(origins, [candidate.rstrip("/")])
 
     for domain in _parse_csv_env("ALLOWED_DOMAINS"):
         parsed = urlparse(domain if "://" in domain else f"https://{domain}")
         if parsed.scheme and parsed.netloc:
             https_origin = f"https://{parsed.netloc}"
             http_origin = f"http://{parsed.netloc}"
-            if https_origin not in origins:
-                origins.append(https_origin)
-            if http_origin not in origins:
-                origins.append(http_origin)
+            origins = _merge_origins_unique(origins, [https_origin, http_origin])
 
     if os.environ.get("ENVIRONMENT", "dev").lower() == "dev":
         origins = _merge_origins_unique(origins, list(_LOCAL_DEV_ORIGINS))
@@ -137,6 +157,10 @@ def _build_allowed_origins() -> list[str]:
         origins = _merge_origins_unique(origins, _dolli_cors_fallback_origins(channel))
         if channel == "dev":
             origins = _merge_origins_unique(origins, list(_LOCAL_DEV_ORIGINS))
+
+    # Prod SPA is served at both apex and www; env often lists only one → the other gets CORS 400 on preflight.
+    if _should_merge_dolli_prod_spa_cors(origins):
+        origins = _merge_origins_unique(origins, _dolli_cors_fallback_origins("prod"))
 
     return origins
 

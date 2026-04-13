@@ -234,7 +234,8 @@ export default function Login() {
                     minLength={isRegister && opts.email_signup ? 8 : undefined}
                     autoComplete={isRegister ? 'new-password' : 'current-password'}
                   />
-                  {!isRegister && opts?.password_reset ? (
+                  {/* Show whenever email/password sign-in exists; forgot page explains if server has no SMTP / ALLOW_PASSWORD_RESET */}
+                  {!isRegister && opts?.password ? (
                     <div className="text-right -mt-1">
                       <Link
                         to="/auth/forgot-password"
