@@ -1,0 +1,48 @@
+# Dolli — local stack: web (nginx + SPA) on :8080, API internal on :8000
+# Usage:
+#   docker compose build
+#   docker compose up
+# Open http://localhost:8080  (override port: WEB_PORT=9090 docker compose up)
+#
+# Optional secrets / OIDC: copy docker/env.docker.example → docker/.env.docker and add
+#   env_file: [docker/default.env, docker/.env.docker]
+# Data: named volume dolli-sqlite (SQLite at /data/dolli.db inside api container)
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    env_file:
+      - docker/default.env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      DATABASE_URL: sqlite+aiosqlite:////data/dolli.db
+      FRONTEND_URL: http://localhost:8080
+      VITE_FRONTEND_URL: http://localhost:8080
+      ALLOWED_ORIGINS: http://localhost:8080
+      ENVIRONMENT: dev
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - dolli-sqlite:/data
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+
+volumes:
+  dolli-sqlite:
