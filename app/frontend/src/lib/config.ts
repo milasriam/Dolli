@@ -32,7 +32,13 @@ function inferApiBaseURLFromHost(): string {
   }
 
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://127.0.0.1:8000';
+    const port = window.location.port;
+    // Vite (or similar): SPA on 5173/3000/3001/4173 → API on host port 8000
+    if (['5173', '3000', '3001', '4173'].includes(port)) {
+      return 'http://127.0.0.1:8000';
+    }
+    // docker-compose / nginx: SPA and /api share one origin (e.g. http://localhost:8080)
+    return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
   }
 
   // Generic fallback for custom preview domains

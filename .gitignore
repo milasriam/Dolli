@@ -2,6 +2,7 @@
 .env
 app/backend/.env
 app/frontend/.env
+docker/.env.docker
 
 venv/
 *.log
