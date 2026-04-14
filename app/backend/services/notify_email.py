@@ -223,6 +223,7 @@ async def send_password_reset_email(to_email: str, reset_url: str) -> None:
         logger.info("password_reset_email sent to=%s", to_email)
     except Exception:
         logger.exception("password_reset_email failed to=%s", to_email)
+        raise
 
 
 async def send_magic_login_email(to_email: str, sign_in_url: str) -> None:

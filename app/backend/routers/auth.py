@@ -137,10 +137,61 @@ def is_magic_link_feature_enabled() -> bool:
     return smtp_delivery_configured()
 
 
+def _infer_staging_like_deploy() -> bool:
+    """True when this backend is the staging.dolli instance (same VPS as prod is OK — use env/URLs)."""
+    if (os.environ.get("DOLLI_STAGING") or "").lower() in ("1", "true", "yes"):
+        return True
+    for key in ("DEPLOY_CHANNEL", "DOLLI_CORS_CHANNEL"):
+        v = (os.environ.get(key) or "").lower()
+        if "stag" in v:
+            return True
+    for key in ("ENVIRONMENT", "APP_ENV"):
+        v = (os.environ.get(key) or "").lower()
+        if "stag" in v:
+            return True
+    bundle = " ".join(
+        (os.environ.get(k) or "").lower()
+        for k in ("FRONTEND_URL", "VITE_FRONTEND_URL", "PYTHON_BACKEND_URL", "BACKEND_PUBLIC_URL")
+    )
+    if "staging.dolli" in bundle or "api-staging.dolli" in bundle:
+        return True
+    # VPS layout: staging SQLite path (when URL envs are minimal).
+    db = (os.environ.get("DATABASE_URL") or "").lower()
+    if "staging.db" in db or "/dolli/staging" in db:
+        return True
+    return False
+
+
 def is_password_reset_feature_enabled() -> bool:
-    if os.environ.get("ALLOW_PASSWORD_RESET", "").lower() not in ("1", "true", "yes"):
+    """Prod: requires ALLOW_PASSWORD_RESET + SMTP. Staging: SMTP alone is enough unless DISABLE_PASSWORD_RESET_ON_STAGING=1."""
+    if not smtp_delivery_configured():
         return False
-    return smtp_delivery_configured()
+    if os.environ.get("ALLOW_PASSWORD_RESET", "").lower() in ("1", "true", "yes"):
+        return True
+    if _infer_staging_like_deploy() and os.environ.get("DISABLE_PASSWORD_RESET_ON_STAGING", "").lower() not in (
+        "1",
+        "true",
+        "yes",
+    ):
+        return True
+    return False
+
+
+def _password_reset_disabled_response() -> HTTPException:
+    """503 with a hint when staging has no SMTP (prod usually needs ALLOW_PASSWORD_RESET + SMTP)."""
+    if _infer_staging_like_deploy() and not smtp_delivery_configured():
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Password reset needs outbound email: add SMTP_HOST (and related SMTP_* variables) to "
+                "/etc/dolli/staging.env, then restart dolli-backend-staging. On the same VPS you can copy the "
+                "SMTP_* block from /etc/dolli/prod.env."
+            ),
+        )
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Password reset is not available (set ALLOW_PASSWORD_RESET=1 and configure SMTP).",
+    )
 
 
 def legacy_fixed_password_enabled() -> bool:
@@ -589,10 +640,7 @@ async def logout():
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
 async def forgot_password(payload: ForgotPasswordRequest, request: Request, db: AsyncSession = Depends(get_db)):
     if not is_password_reset_feature_enabled():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Password reset is not available on this server",
-        )
+        raise _password_reset_disabled_response()
     em = payload.email.strip().lower()
     now = time.monotonic()
     last = _pwd_reset_last_sent.get(em, 0.0)
@@ -611,17 +659,21 @@ async def forgot_password(payload: ForgotPasswordRequest, request: Request, db: 
 
     fe = get_frontend_redirect_base(request).rstrip("/")
     reset_url = f"{fe}/auth/reset-password?token={quote(raw, safe='')}"
-    await send_password_reset_email(user.email, reset_url)
+    try:
+        await send_password_reset_email(user.email, reset_url)
+    except Exception as exc:
+        logger.exception("forgot_password: email send failed for user_id=%s", user.id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not send reset email. Check SMTP configuration or try again later.",
+        ) from exc
     return ForgotPasswordResponse()
 
 
 @router.post("/reset-password", response_model=TokenExchangeResponse)
 async def reset_password_with_email_token(payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
     if not is_password_reset_feature_enabled():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Password reset is not available on this server",
-        )
+        raise _password_reset_disabled_response()
     auth_service = AuthService(db)
     try:
         user = await auth_service.reset_password_with_token(payload.token, payload.password)

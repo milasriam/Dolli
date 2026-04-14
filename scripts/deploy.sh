@@ -7,10 +7,11 @@ if [[ "$TARGET" != "prod" && "$TARGET" != "staging" ]]; then
   exit 1
 fi
 
-SSH_HOST="root@109.235.119.191"
-SSH_PORT="2222"
-SSH_KEY="$HOME/.ssh/id_ed25519"
-REMOTE_APP="/opt/dolli/app"
+# Override when IP/port change: SSH_HOST=root@1.2.3.4 SSH_PORT=22 ./scripts/deploy.sh prod
+SSH_HOST="${SSH_HOST:-root@109.235.119.191}"
+SSH_PORT="${SSH_PORT:-2222}"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"
+REMOTE_APP="${REMOTE_APP:-/opt/dolli/app}"
 
 if [[ "$TARGET" == "prod" ]]; then
   API_URL="https://api.dolli.space"
@@ -28,6 +29,7 @@ fi
 echo "===> Sync code to server"
 rsync -az --delete \
   --exclude ".git" --exclude ".venv" --exclude "venv" --exclude "node_modules" --exclude "dist" \
+  --exclude "app/backend/.env" --exclude "app/frontend/.env" --exclude "app/.env" \
   -e "ssh -p ${SSH_PORT} -i ${SSH_KEY}" \
   "./" "${SSH_HOST}:${REMOTE_APP}/"
 
@@ -83,6 +85,15 @@ rsync -a --delete dist/ ${FRONT_DIR}/
 systemctl restart ${BACKEND_SERVICE}
 systemctl is-active ${BACKEND_SERVICE}
 
+# Keep VPS nginx in sync with repo (prod apex/www need same-origin /api/ → backend).
+# Use expanded ${REMOTE_APP} only — avoid extra shell variables in this block (unquoted heredoc, set -u).
+if [[ -f ${REMOTE_APP}/deploy/nginx/dolli-multi.conf ]]; then
+  echo "===> Install nginx site from repo (same-origin /api/ for dolli.space / www / staging)"
+  cp -f ${REMOTE_APP}/deploy/nginx/dolli-multi.conf /etc/nginx/sites-available/dolli-multi.conf
+  nginx -t
+  systemctl reload nginx
+fi
+
 echo "=== wait for API readiness ==="
 ok=0
 for i in \$(seq 1 30); do
@@ -116,6 +127,15 @@ curl -sSI -X OPTIONS "${API_URL}/api/v1/auth/local-login" \
   -H "Origin: ${SITE_URL}" \
   -H "Access-Control-Request-Method: POST" \
   -H "Access-Control-Request-Headers: content-type" | sed -n '1,25p' || true
+
+echo "=== same-origin /api (SPA must not swallow JSON — nginx location /api/) ==="
+body=\$(curl -sS "${SITE_URL}/api/v1/auth/login-options" || true)
+if [[ "\${body:0:1}" == "<" ]]; then
+  echo "ERROR: ${SITE_URL}/api/v1/auth/login-options returned HTML."
+  echo "Fix: ensure deploy/nginx/dolli-multi.conf is installed (this script copies it before this check)."
+  exit 1
+fi
+echo "\${body}" | head -c 220 && echo
 
 # Demo catalog: same idempotent seed on staging and prod (see scripts/seed_demo_campaigns.py).
 if [ "${TARGET}" = "staging" ] || [ "${TARGET}" = "prod" ]; then

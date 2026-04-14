@@ -41,7 +41,8 @@ export default function ForgotPassword() {
     }
   };
 
-  const enabled = Boolean(opts?.password_reset);
+  // Show form if server advertises reset, or if email/password login exists (user came from login; POST still enforces SMTP + ALLOW_PASSWORD_RESET).
+  const enabled = Boolean(opts?.password_reset || opts?.password);
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">

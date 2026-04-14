@@ -382,15 +382,29 @@ class RPApi {
   }
 
   async requestPasswordReset(email: string): Promise<void> {
-    const res = await fetch(`${this.getBaseURL()}/api/v1/auth/forgot-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim() }),
-      credentials: 'omit',
-    });
+    const url = `${this.getBaseURL()}/api/v1/auth/forgot-password`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+        credentials: 'omit',
+      });
+    } catch {
+      const err = new Error('Network Error') as Error & { code?: string };
+      err.code = 'ERR_NETWORK';
+      throw err;
+    }
+    const raw = await res.text().catch(() => '');
+    let data: Record<string, unknown> = {};
+    try {
+      if (raw) data = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      data = {};
+    }
     if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { detail?: string };
-      throw new Error(typeof data.detail === 'string' ? data.detail : 'Could not send reset email');
+      throw new Error(messageFromFastApiBody(data, 'Could not send reset email', res.status));
     }
   }
 
